@@ -1,0 +1,43 @@
+{
+  "name": "class-seat-manager",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "description": "교사용 로컬 자리배치 Electron 앱",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "check:sqlite": "node scripts/check-sqlite-binding.cjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package:win": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "electron": "^34.3.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.1.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  },
+  "build": {
+    "appId": "local.class-seat-manager",
+    "productName": "학급 자리배치 도우미",
+    "files": ["out/**/*"],
+    "extraResources": [{"from": "src/main/db/migrations", "to": "migrations"}],
+    "win": {"target": ["nsis"]}
+  }
+}

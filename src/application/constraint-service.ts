@@ -1,0 +1,5 @@
+import type { StudentPairConstraint, StudentSeatConstraint } from "../domain/models";
+export interface ConstraintSet { seat: StudentSeatConstraint[]; pairs: StudentPairConstraint[]; }
+export interface ConstraintWriteRepository { replace(schoolYearId: string, set: ConstraintSet): void; }
+export function validateConstraintSet(set: ConstraintSet): string[] { const errors: string[] = []; const pairs = new Set<string>(); for (const pair of set.pairs) { if (pair.studentAId === pair.studentBId) errors.push("같은 학생을 pair로 지정할 수 없습니다."); const key = [pair.studentAId, pair.studentBId].sort().join("::"); if (pairs.has(key)) errors.push("동일한 학생 pair 조건이 중복됩니다."); pairs.add(key); if (pair.type === "최소 거리" && (!pair.minDistance || pair.minDistance <= 0)) errors.push("최소 거리 조건에는 0보다 큰 거리를 입력해야 합니다."); } return [...new Set(errors)]; }
+export class ConstraintService { constructor(private readonly repository: ConstraintWriteRepository) {} save(schoolYearId: string, set: ConstraintSet): ConstraintSet { const errors = validateConstraintSet(set); if (errors.length) throw new Error(errors.join(" ")); this.repository.replace(schoolYearId, set); return set; } }

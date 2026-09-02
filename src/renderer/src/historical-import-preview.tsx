@@ -1,0 +1,18 @@
+import { useState, type ChangeEvent } from "react";
+import { parseHistoricalSession, validateHistoricalSession, type HistoricalSessionValidation } from "../../domain/historical-seating-import";
+import type { LayoutItem } from "../../domain/classroom-layout";
+import type { Student } from "../../domain/models";
+
+const csvExample = "학생 이름,자리 번호\n홍길동,1\n김영희,2";
+
+export function HistoricalImportPreview({ schoolYearId, classroomLayoutId, students, desks, onSaved }: { schoolYearId: string; classroomLayoutId: string; students: Student[]; desks: LayoutItem[]; onSaved: () => void }): JSX.Element {
+  const [input, setInput] = useState("");
+  const [date, setDate] = useState("");
+  const [semester, setSemester] = useState<1 | 2>(1);
+  const [result, setResult] = useState<HistoricalSessionValidation | null>(null);
+  const [message, setMessage] = useState("");
+  const preview = (): void => { setMessage(""); try { const parsed = parseHistoricalSession(input, 1); const validated = validateHistoricalSession(parsed, students, desks); setResult({ ...validated, errors: date ? validated.errors : [...validated.errors, "배치일을 입력하세요."], valid: validated.valid && Boolean(date) }); } catch (error) { setResult({ sessionNumber: 1, assignments: [], errors: [error instanceof Error ? error.message : "입력 형식을 확인하세요."], valid: false }); } };
+  const readFile = (event: ChangeEvent<HTMLInputElement>): void => { const file = event.target.files?.[0]; if (!file) return; void file.text().then((text) => { setInput(text.replace(/^\uFEFF/, "")); setResult(null); setMessage(`${file.name} 파일을 불러왔습니다.`); }).catch(() => setMessage("파일을 읽지 못했습니다.")); };
+  const save = (): void => { if (!result?.valid || !classroomLayoutId) return; const assignments = result.assignments.map((assignment) => ({ studentId: assignment.studentId!, seatId: assignment.seatId! })); void window.appApi.history.importHistorical(schoolYearId, classroomLayoutId, students, desks, [{ semester, occurredOn: date, assignments }]).then(() => { setMessage(`${date} ${semester}학기 자리 기록을 저장했습니다.`); setResult(null); setInput(""); setDate(""); onSaved(); }).catch((reason: unknown) => setMessage(reason instanceof Error ? reason.message : "자리 기록 저장에 실패했습니다.")); };
+  return <section className="history-section"><div className="section-heading"><div><h2>과거 자리 기록 가져오기</h2><p className="muted">기록 한 건을 배치일로 구분해 저장합니다. 필요할 때마다 CSV 파일을 다시 가져오세요.</p></div><label>학기 <select value={semester} onChange={(event) => setSemester(Number(event.target.value) as 1 | 2)}><option value="1">1학기</option><option value="2">2학기</option></select></label></div><div className="csv-example"><strong>CSV 예시</strong><pre>{csvExample}</pre><span>첫 줄 제목은 선택 사항이며, 쉼표 또는 탭으로 구분할 수 있습니다.</span></div><div className="history-import-controls"><label>CSV 파일 선택 <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={readFile} /></label><label>배치일 <input type="date" value={date} onChange={(event) => { setDate(event.target.value); setResult(null); }} /></label></div><label className="history-input-label">CSV 내용 붙여넣기<textarea value={input} onChange={(event) => { setInput(event.target.value); setResult(null); }} placeholder={csvExample} rows={7} /></label><div className="history-import-actions"><button type="button" onClick={preview}>매칭 미리보기</button>{result?.valid && <button type="button" className="secondary" onClick={save}>이 기록 저장</button>}</div>{result && <div className={result.valid ? "success-text" : "error-message"}>{result.valid ? `${result.assignments.length}명 매칭 완료 · ${date} 기록으로 저장할 수 있습니다.` : result.errors.join(" · ")}</div>}{message && <p className="save-message">{message}</p>}</section>;
+}
