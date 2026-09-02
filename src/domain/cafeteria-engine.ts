@@ -2,7 +2,7 @@ import type { Student, StudentPairConstraint } from "./models";
 
 export interface CafeteriaAssignment { studentId: string; queueOrder: number; cafeteriaSeatId: string; role?: "marshal"; }
 export interface CafeteriaPairDetail { studentAId: string; studentBId: string; type: StudentPairConstraint["type"]; strength: StudentPairConstraint["strength"]; queueDistance: number; seatDistance: number; facing: boolean; status: "satisfied" | "warning" | "violation"; penalty: number; }
-export interface CafeteriaEvaluation { score: number; totalPenalty: number; pairDetails: CafeteriaPairDetail[]; }
+export interface CafeteriaEvaluation { score: number; totalPenalty: number; genderAdjacencyPenalty: number; genderScore: number; pairDetails: CafeteriaPairDetail[]; }
 export interface CafeteriaResult { assignments: CafeteriaAssignment[]; seed: number; marshalIds: string[]; evaluation: CafeteriaEvaluation; }
 
 const studentSeats = Array.from({ length: 19 }, (_, index) => `CAF-${String(index + 3).padStart(2, "0")}`);
@@ -26,7 +26,18 @@ export function validateCafeteriaAssignments(assignments: CafeteriaAssignment[])
   return errors;
 }
 
-export function evaluateCafeteriaPairs(assignments: CafeteriaAssignment[], constraints: StudentPairConstraint[]): CafeteriaEvaluation {
+function genderAdjacencyPenalty(assignments: CafeteriaAssignment[], students: Student[]): number {
+  const genderById = new Map(students.map((student) => [student.studentId, student.gender]));
+  const bySeat = new Map(assignments.map((item) => [Number(item.cafeteriaSeatId.slice(-2)), item]));
+  let penalty = 0;
+  for (const row of [[2, 11], [12, 22]] as const) for (let seat = row[0]; seat < row[1]; seat += 1) {
+    const current = bySeat.get(seat); const next = bySeat.get(seat + 1);
+    if (current && next && genderById.get(current.studentId) === genderById.get(next.studentId)) penalty += 1;
+  }
+  return penalty;
+}
+
+export function evaluateCafeteriaPairs(assignments: CafeteriaAssignment[], constraints: StudentPairConstraint[], students: Student[] = []): CafeteriaEvaluation {
   const byStudent = new Map(assignments.map((item) => [item.studentId, item]));
   const pairDetails: CafeteriaPairDetail[] = [];
   const totalPenalty = constraints.reduce((total, constraint) => {
@@ -42,7 +53,8 @@ export function evaluateCafeteriaPairs(assignments: CafeteriaAssignment[], const
     pairDetails.push({ studentAId: constraint.studentAId, studentBId: constraint.studentBId, type: constraint.type, strength: constraint.strength, queueDistance, seatDistance, facing, status: violated ? constraint.strength === "필수" ? "violation" : "warning" : penalty === 0 ? "satisfied" : "warning", penalty });
     return total + penalty;
   }, 0);
-  return { totalPenalty, score: Math.max(0, Math.round(100 - Math.min(100, totalPenalty * 10))), pairDetails };
+  const genderPenalty = genderAdjacencyPenalty(assignments, students);
+  return { totalPenalty, score: Math.max(0, Math.round(100 - Math.min(100, totalPenalty * 10))), genderAdjacencyPenalty: genderPenalty, genderScore: Math.max(0, Math.round(100 - genderPenalty * 10)), pairDetails };
 }
 
 export function generateCafeteriaResult(students: Student[], marshalCandidateIds: string[] = [], seed = Date.now(), pairConstraints: StudentPairConstraint[] = []): CafeteriaResult {
@@ -55,8 +67,8 @@ export function generateCafeteriaResult(students: Student[], marshalCandidateIds
   const marshals = marshalIds.map((studentId, index) => ({ studentId, queueOrder: active.length - 1 + index, cafeteriaSeatId: index === 0 ? "CAF-02" : "CAF-22", role: "marshal" as const }));
   let queue = shuffle(active.filter((student) => !marshalIds.includes(student.studentId)), rng);
   const makeAssignments = (rows: Student[]): CafeteriaAssignment[] => [...rows.map((student, index) => ({ studentId: student.studentId, queueOrder: index + 1, cafeteriaSeatId: studentSeats[index] })), ...marshals];
-  let best = makeAssignments(queue); let bestEvaluation = evaluateCafeteriaPairs(best, pairConstraints);
-  for (let attempt = 0; attempt < 300; attempt += 1) { const next = shuffle(queue, rng); const evaluation = evaluateCafeteriaPairs(makeAssignments(next), pairConstraints); if (evaluation.totalPenalty <= bestEvaluation.totalPenalty) { queue = next; best = makeAssignments(next); bestEvaluation = evaluation; } }
+  let best = makeAssignments(queue); let bestEvaluation = evaluateCafeteriaPairs(best, pairConstraints, active);
+  for (let attempt = 0; attempt < 300; attempt += 1) { const next = shuffle(queue, rng); const evaluation = evaluateCafeteriaPairs(makeAssignments(next), pairConstraints, active); if (evaluation.totalPenalty + evaluation.genderAdjacencyPenalty * 3 <= bestEvaluation.totalPenalty + bestEvaluation.genderAdjacencyPenalty * 3) { queue = next; best = makeAssignments(next); bestEvaluation = evaluation; } }
   const assignments = best.sort((a, b) => a.queueOrder - b.queueOrder);
-  return { assignments, seed, marshalIds, evaluation: evaluateCafeteriaPairs(assignments, pairConstraints) };
+  return { assignments, seed, marshalIds, evaluation: evaluateCafeteriaPairs(assignments, pairConstraints, active) };
 }
