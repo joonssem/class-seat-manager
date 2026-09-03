@@ -16,6 +16,7 @@ import { Cafeteria } from "./cafeteria";
 import { CafeteriaHistory } from "./cafeteria-history";
 import { Backup } from "./backup";
 import { NewSeating } from "./new-seating";
+import { Button, ConfirmDialog, StatusBanner } from "./ui";
 import "./styles.css";
 
 declare global {
@@ -30,6 +31,7 @@ function StudentManager({ students, onChange, schoolYearId, schoolYearLabel }: {
   const [gender, setGender] = useState<Student["gender"]>("남");
   const [paste, setPaste] = useState("");
   const [error, setError] = useState("");
+  const [transferTarget, setTransferTarget] = useState<Student | null>(null);
 
   const addStudent = (): void => {
     const studentNumber = Number(number);
@@ -52,16 +54,23 @@ function StudentManager({ students, onChange, schoolYearId, schoolYearLabel }: {
     void Promise.all(imported.map((item) => window.appApi.students.add(schoolYearId, { studentNumber: item.studentNumber, name: item.name, gender: item.gender }))).then(() => window.appApi.students.list(schoolYearId)).then((next) => { onChange(next); setPaste(""); setError(""); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "명단을 가져오지 못했습니다."));
   };
 
+  const transferOut = (): void => {
+    if (!transferTarget) return;
+    void window.appApi.students.transferOut(transferTarget.studentId, new Date().toISOString().slice(0, 10)).then(() => window.appApi.students.list(schoolYearId)).then(onChange).then(() => setTransferTarget(null)).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "전출 처리에 실패했습니다."));
+  };
+
   return <section className="student-panel">
-    <div className="panel-heading"><div><span className="eyebrow">{schoolYearLabel}</span><h2>학생 관리</h2></div><span className="count-badge">재학 {students.filter((student) => student.enrollmentStatus === "재학").length}명</span></div>
-    <div className="student-tools"><div className="form-row"><input aria-label="출석번호" value={number} onChange={(event) => setNumber(event.target.value)} placeholder="번호" /><input aria-label="이름" value={name} onChange={(event) => setName(event.target.value)} placeholder="이름" /><select aria-label="성별" value={gender} onChange={(event) => setGender(event.target.value as Student["gender"])}><option>남</option><option>여</option></select><button type="button" onClick={addStudent}>학생 추가</button></div><textarea aria-label="학생 명단 붙여넣기" value={paste} onChange={(event) => setPaste(event.target.value)} placeholder={'여러 줄 붙여넣기\n1\t홍길동\t남'} /><button type="button" className="secondary import-button" onClick={importPaste}>붙여넣기 명단 가져오기</button></div>
-    {error && <p className="error-message">{error}</p>}
-    <div className="student-table"><div className="table-row table-head"><span>번호</span><span>이름</span><span>성별</span><span>상태</span><span>행동</span></div>{students.map((student) => <div className="table-row" key={student.studentId}><span>{student.studentNumber}</span><span>{student.name}</span><span>{student.gender}</span><span>{student.enrollmentStatus}</span><span>{student.enrollmentStatus === "재학" ? <button type="button" className="text-button" onClick={() => void window.appApi.students.transferOut(student.studentId, new Date().toISOString().slice(0, 10)).then(() => window.appApi.students.list(schoolYearId)).then(onChange).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "전출 처리에 실패했습니다."))}>전출 처리</button> : "과거 기록 보존"}</span></div>)}</div>
-  </section>;
+     <div className="panel-heading"><div><span className="eyebrow">{schoolYearLabel}</span><h2>학생 관리</h2></div><span className="count-badge">재학 {students.filter((student) => student.enrollmentStatus === "재학").length}명</span></div>
+     <div className="student-tools"><div className="student-entry-card"><h3>학생 한 명 추가</h3><p className="muted">출석번호, 이름, 성별을 입력합니다.</p><div className="form-row"><input aria-label="출석번호" value={number} onChange={(event) => setNumber(event.target.value)} placeholder="번호" /><input aria-label="이름" value={name} onChange={(event) => setName(event.target.value)} placeholder="이름" /><select aria-label="성별" value={gender} onChange={(event) => setGender(event.target.value as Student["gender"])}><option>남</option><option>여</option></select><Button onClick={addStudent}>학생 추가</Button></div></div><div className="student-entry-card"><h3>명단 붙여넣기</h3><p className="muted">한 줄에 번호, 이름, 성별을 탭 또는 쉼표로 구분합니다.</p><textarea aria-label="학생 명단 붙여넣기" value={paste} onChange={(event) => setPaste(event.target.value)} placeholder={'예시\n1\t홍길동\t남'} /><Button variant="secondary" className="import-button" onClick={importPaste}>붙여넣기 명단 가져오기</Button></div></div>
+     {error && <p className="error-message" role="alert">{error}</p>}
+     <p className="table-caption">총 {students.length}명 등록됨 · 재학 {students.filter((student) => student.enrollmentStatus === "재학").length}명</p>
+     <div className="student-table"><div className="table-row table-head"><span>번호</span><span>이름</span><span>성별</span><span>상태</span><span>행동</span></div>{students.map((student) => <div className="table-row" key={student.studentId}><span>{student.studentNumber}</span><span>{student.name}</span><span>{student.gender}</span><span>{student.enrollmentStatus}</span><span>{student.enrollmentStatus === "재학" ? <button type="button" className="text-button danger-text-button" onClick={() => setTransferTarget(student)}>전출 처리</button> : "과거 기록 보존"}</span></div>)}</div>
+     {transferTarget && <ConfirmDialog title={`${transferTarget.name} 학생을 전출 처리할까요?`} confirmLabel="전출 처리" onCancel={() => setTransferTarget(null)} onConfirm={transferOut}>전출 처리하면 앞으로의 자리배치에서 제외됩니다. 과거 자리 기록은 보존됩니다.</ConfirmDialog>}
+   </section>;
 }
 
 function DashboardCard({ title, description, action, onClick, disabled = false }: { title: string; description: string; action: string; onClick: () => void; disabled?: boolean }): JSX.Element {
-  return <article className="dashboard-card compact-card"><h3>{title}</h3><p>{description}</p><button type="button" className="secondary" disabled={disabled} onClick={onClick}>{action}</button></article>;
+  return <article className="dashboard-card compact-card"><h3>{title}</h3><p>{description}</p><Button variant="secondary" disabled={disabled} title={disabled ? "먼저 학생 명단과 교실 좌석을 설정하세요." : undefined} onClick={onClick}>{action}</Button></article>;
 }
 
 function App(): JSX.Element {
@@ -144,10 +153,9 @@ function App(): JSX.Element {
         <span className="status-dot" />
         <div><h2>처음 설정을 시작하세요</h2><p>먼저 학년도를 만든 뒤 학생 명단과 교실 책상 배치를 등록합니다.</p><div className="year-form"><label htmlFor="school-year">학년도</label><input id="school-year" value={yearInput} onChange={(event) => setYearInput(event.target.value)} /><span>년</span><button type="button" onClick={createYear}>학년도 생성</button></div>{yearError && <p className="error-message">{yearError}</p>}</div>
       </section> : <>
-        <section className="dashboard-status" aria-labelledby="setup-status-title">
-          <div><span className={readyForSeating ? "status-icon ready" : "status-icon"} aria-hidden="true">{readyForSeating ? "✓" : "!"}</span><div><h2 id="setup-status-title">{readyForSeating ? "자리 생성 준비 완료" : "자리 생성을 위한 준비가 필요합니다"}</h2><p>{readyForSeating ? "학생과 교실 좌석이 준비되었습니다. 조건은 필요할 때 추가할 수 있습니다." : `${missingSetup.join("과 ")}을(를) 설정한 뒤 새 자리배치를 만들 수 있습니다.`}</p></div></div>
-          <button type="button" className="primary-action" disabled={!readyForSeating} onClick={() => setScreen("new-seating")}>{currentAssignments.length ? "새 자리배치 만들기" : "첫 자리배치 만들기"}</button>
-        </section>
+        <StatusBanner tone={readyForSeating ? "success" : "warning"} title={readyForSeating ? "자리 생성 준비가 완료되었습니다" : "자리 생성을 위한 준비가 필요합니다"} action={readyForSeating ? <Button onClick={() => setScreen("new-seating")}>{currentAssignments.length ? "새 자리배치 만들기" : "첫 자리배치 만들기"}</Button> : <Button onClick={() => setScreen(activeStudents.length === 0 ? "students" : "classroom")}>{activeStudents.length === 0 ? "학생 명단 등록하기" : "교실 좌석 설정하기"}</Button>}>
+          {readyForSeating ? `학생 ${activeStudents.length}명과 좌석 ${deskCount}개가 준비되었습니다. 새 자리배치를 만들 수 있습니다.` : `${missingSetup.join("과 ")}을(를) 먼저 설정해 주세요.`}
+        </StatusBanner>
         <section className="setup-summary" aria-label="현재 준비 상태">
           <div><strong>{activeStudents.length}명</strong><span>{activeStudents.length ? "학생 등록 완료" : "학생 등록 필요"}</span></div>
           <div><strong>{deskCount}자리</strong><span>{deskCount ? "교실 좌석 설정 완료" : "교실 좌석 설정 필요"}</span></div>

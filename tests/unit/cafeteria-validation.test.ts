@@ -14,4 +14,9 @@ describe("급식실 배치 검증", () => {
     const errors = validateCafeteriaAssignments([{ studentId: "student-1", queueOrder: 23, cafeteriaSeatId: "CAF-23" }]);
     expect(errors).toEqual(expect.arrayContaining(["줄서기 순번은 1부터 21 사이여야 합니다.", "급식실 학생 좌석 ID가 올바르지 않습니다."]));
   });
+
+  it("인솔자는 2번 또는 22번 자리에만 배정한다", () => {
+    expect(validateCafeteriaAssignments([{ studentId: "student-1", queueOrder: 1, cafeteriaSeatId: "CAF-12", role: "marshal" }])).toContain("인솔 학생은 2번 또는 22번 자리에 배정해야 합니다.");
+    expect(validateCafeteriaAssignments([{ studentId: "student-1", queueOrder: 1, cafeteriaSeatId: "CAF-22", role: "marshal" }])).not.toContain("인솔 학생은 2번 또는 22번 자리에 배정해야 합니다.");
+  });
 });

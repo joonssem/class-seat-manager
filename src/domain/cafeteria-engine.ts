@@ -4,15 +4,16 @@ export interface CafeteriaAssignment { studentId: string; queueOrder: number; ca
 export interface CafeteriaPairDetail { studentAId: string; studentBId: string; type: StudentPairConstraint["type"]; strength: StudentPairConstraint["strength"]; queueDistance: number; seatDistance: number; facing: boolean; status: "satisfied" | "warning" | "violation"; penalty: number; }
 export interface CafeteriaEvaluation { score: number; totalPenalty: number; genderAdjacencyPenalty: number; genderScore: number; pairDetails: CafeteriaPairDetail[]; }
 export interface CafeteriaResult { assignments: CafeteriaAssignment[]; seed: number; marshalIds: string[]; evaluation: CafeteriaEvaluation; }
+export type CafeteriaGenerationMode = "random" | "marshal";
 
-const studentSeats = Array.from({ length: 19 }, (_, index) => `CAF-${String(index + 3).padStart(2, "0")}`);
+const randomStudentSeats = Array.from({ length: 21 }, (_, index) => `CAF-${String(index + 2).padStart(2, "0")}`);
+const marshalQueueSeats = Array.from({ length: 19 }, (_, index) => `CAF-${String(index + 3).padStart(2, "0")}`);
 const facingSeat = (seatId: string): string => {
   const number = Number(seatId.slice(-2));
   return `CAF-${String(number <= 11 ? number + 11 : number - 11).padStart(2, "0")}`;
 };
 const random = (seed: number): (() => number) => { let state = seed >>> 0; return () => { state = (1664525 * state + 1013904223) >>> 0; return state / 0x100000000; }; };
 const shuffle = <T,>(items: T[], rng: () => number): T[] => [...items].sort(() => rng() - 0.5);
-const pairKey = (a: string, b: string): string => [a, b].sort().join("::");
 
 export function validateCafeteriaAssignments(assignments: CafeteriaAssignment[]): string[] {
   const errors: string[] = [];
@@ -48,8 +49,11 @@ export function evaluateCafeteriaPairs(assignments: CafeteriaAssignment[], const
     const seatDistance = Math.abs((seatNumbers[0] - 1) % 11 - (seatNumbers[1] - 1) % 11) + (Math.floor((seatNumbers[0] - 1) / 11) === Math.floor((seatNumbers[1] - 1) / 11) ? 0 : 1);
     const facing = facingSeat(a.cafeteriaSeatId) === b.cafeteriaSeatId;
     const multiplier = constraint.strength === "필수" ? 10 : constraint.strength === "가급적" ? 3 : 1;
-    const violated = constraint.type === "바로 인접 금지" ? queueDistance <= 1 || facing || seatDistance <= 1 : constraint.type === "최소 거리" ? queueDistance < (constraint.minDistance ?? 1) || seatDistance < (constraint.minDistance ?? 1) : false;
-    const penalty = constraint.type === "가능한 한 멀리" ? multiplier * (1 / Math.max(queueDistance, 1) + 1 / Math.max(seatDistance, 1)) : violated ? multiplier : 0;
+    // 마주보는 자리는 줄 거리나 같은 줄의 옆자리와 별개로 직접 대면하는 자리다.
+    // 모든 pair 유형에서 이를 가까운 자리로 취급해 점수에 명시적으로 반영한다.
+    const facingViolation = facing && constraint.type !== "바로 인접 금지";
+    const violated = constraint.type === "바로 인접 금지" ? queueDistance <= 1 || facing || seatDistance <= 1 : constraint.type === "최소 거리" ? queueDistance < (constraint.minDistance ?? 1) || seatDistance < (constraint.minDistance ?? 1) || facingViolation : facingViolation;
+    const penalty = constraint.type === "가능한 한 멀리" ? multiplier * (1 / Math.max(queueDistance, 1) + 1 / Math.max(seatDistance, 1) + (facing ? 1 : 0)) : violated ? multiplier : 0;
     pairDetails.push({ studentAId: constraint.studentAId, studentBId: constraint.studentBId, type: constraint.type, strength: constraint.strength, queueDistance, seatDistance, facing, status: violated ? constraint.strength === "필수" ? "violation" : "warning" : penalty === 0 ? "satisfied" : "warning", penalty });
     return total + penalty;
   }, 0);
@@ -57,18 +61,36 @@ export function evaluateCafeteriaPairs(assignments: CafeteriaAssignment[], const
   return { totalPenalty, score: Math.max(0, Math.round(100 - Math.min(100, totalPenalty * 10))), genderAdjacencyPenalty: genderPenalty, genderScore: Math.max(0, Math.round(100 - genderPenalty * 10)), pairDetails };
 }
 
-export function generateCafeteriaResult(students: Student[], marshalCandidateIds: string[] = [], seed = Date.now(), pairConstraints: StudentPairConstraint[] = []): CafeteriaResult {
+export function generateCafeteriaResult(students: Student[], marshalCandidateIds: string[] = [], seed = Date.now(), pairConstraints: StudentPairConstraint[] = [], mode: CafeteriaGenerationMode = "random"): CafeteriaResult {
   const active = students.filter((student) => student.enrollmentStatus === "재학");
   if (active.length > 21) throw new Error("급식실 학생 자리는 21명까지 배정할 수 있습니다.");
   const rng = random(seed);
   const candidates = active.filter((student) => marshalCandidateIds.includes(student.studentId));
-  if (marshalCandidateIds.length && candidates.length < 2) throw new Error("인솔 후보 중 재학생이 2명 이상 필요합니다.");
-  const marshalIds = marshalCandidateIds.length ? shuffle(candidates, rng).slice(0, 2).map((student) => student.studentId) : [];
+  if (mode === "marshal" && candidates.length < 2) throw new Error("인솔 후보 중 재학생이 2명 이상 필요합니다.");
+
+  if (mode === "random") {
+    const makeAssignments = (rows: Student[]): CafeteriaAssignment[] => rows.map((student, index) => ({ studentId: student.studentId, queueOrder: index + 1, cafeteriaSeatId: randomStudentSeats[index] }));
+    let queue = shuffle(active, rng);
+    let best = makeAssignments(queue);
+    let bestEvaluation = evaluateCafeteriaPairs(best, pairConstraints, active);
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const next = shuffle(queue, rng);
+      const evaluation = evaluateCafeteriaPairs(makeAssignments(next), pairConstraints, active);
+      if (evaluation.totalPenalty + evaluation.genderAdjacencyPenalty * 3 <= bestEvaluation.totalPenalty + bestEvaluation.genderAdjacencyPenalty * 3) { queue = next; best = makeAssignments(next); bestEvaluation = evaluation; }
+    }
+    const assignments = best.sort((a, b) => a.queueOrder - b.queueOrder);
+    return { assignments, seed, marshalIds: candidates.map((student) => student.studentId), evaluation: evaluateCafeteriaPairs(assignments, pairConstraints, active) };
+  }
+
+  const marshalIds = shuffle(candidates, rng).slice(0, 2).map((student) => student.studentId);
   const marshals = marshalIds.map((studentId, index) => ({ studentId, queueOrder: active.length - 1 + index, cafeteriaSeatId: index === 0 ? "CAF-02" : "CAF-22", role: "marshal" as const }));
   let queue = shuffle(active.filter((student) => !marshalIds.includes(student.studentId)), rng);
-  const makeAssignments = (rows: Student[]): CafeteriaAssignment[] => [...rows.map((student, index) => ({ studentId: student.studentId, queueOrder: index + 1, cafeteriaSeatId: studentSeats[index] })), ...marshals];
+  const makeAssignments = (rows: Student[]): CafeteriaAssignment[] => [...rows.map((student, index) => ({ studentId: student.studentId, queueOrder: index + 1, cafeteriaSeatId: marshalQueueSeats[index] })), ...marshals];
   let best = makeAssignments(queue); let bestEvaluation = evaluateCafeteriaPairs(best, pairConstraints, active);
-  for (let attempt = 0; attempt < 300; attempt += 1) { const next = shuffle(queue, rng); const evaluation = evaluateCafeteriaPairs(makeAssignments(next), pairConstraints, active); if (evaluation.totalPenalty + evaluation.genderAdjacencyPenalty * 3 <= bestEvaluation.totalPenalty + bestEvaluation.genderAdjacencyPenalty * 3) { queue = next; best = makeAssignments(next); bestEvaluation = evaluation; } }
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    const next = shuffle(queue, rng); const evaluation = evaluateCafeteriaPairs(makeAssignments(next), pairConstraints, active);
+    if (evaluation.totalPenalty + evaluation.genderAdjacencyPenalty * 3 <= bestEvaluation.totalPenalty + bestEvaluation.genderAdjacencyPenalty * 3) { queue = next; best = makeAssignments(next); bestEvaluation = evaluation; }
+  }
   const assignments = best.sort((a, b) => a.queueOrder - b.queueOrder);
   return { assignments, seed, marshalIds, evaluation: evaluateCafeteriaPairs(assignments, pairConstraints, active) };
 }
