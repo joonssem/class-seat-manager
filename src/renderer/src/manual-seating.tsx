@@ -20,6 +20,7 @@ export function ManualSeating({ schoolYearId, onBack, initialAssignments = [], o
   const [toast, setToast] = useState("");
 
   useEffect(() => { void Promise.all([window.appApi.students.list(schoolYearId), window.appApi.classroom.get(schoolYearId)]).then(([rows, layout]) => { setStudents(rows.filter((student) => student.enrollmentStatus === "재학")); setLayoutId(layout?.classroomLayoutId ?? ""); setDesks((layout?.items ?? []).filter((item) => item.type === "desk")); }); }, [schoolYearId]);
+  useEffect(() => { const onBeforeUnload = (event: BeforeUnloadEvent): void => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; }; window.addEventListener("beforeunload", onBeforeUnload); return () => window.removeEventListener("beforeunload", onBeforeUnload); }, [dirty]);
 
   const assignedIds = useMemo(() => new Set(Object.values(assignments).filter(Boolean)), [assignments]);
   const unassigned = students.filter((student) => !assignedIds.has(student.studentId));

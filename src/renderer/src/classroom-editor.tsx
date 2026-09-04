@@ -29,6 +29,7 @@ export function ClassroomEditor({ onBack, schoolYearId }: { onBack: () => void; 
   const selectedPosition = useMemo(() => selected?.type === "desk" ? calculateSeatPosition(selected, frontDoor, backDoor) : null, [selected, frontDoor, backDoor]);
 
   useEffect(() => { void window.appApi.classroom.get(schoolYearId).then((saved) => { if (saved?.items.length) setItems(saved.items.map((item) => ({ ...item }))); }); }, [schoolYearId]);
+  useEffect(() => { const onBeforeUnload = (event: BeforeUnloadEvent): void => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; }; window.addEventListener("beforeunload", onBeforeUnload); return () => window.removeEventListener("beforeunload", onBeforeUnload); }, [dirty]);
   const markDirty = (): void => { setDirty(true); setSaveMessage(""); setSaveError(""); };
   const move = (event: PointerEvent<HTMLDivElement>): void => {
     if (!drag) return;

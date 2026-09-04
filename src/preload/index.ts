@@ -17,7 +17,7 @@ const api: AppApi = {
     save: (schoolYearId, items) => ipcRenderer.invoke("classroom:save", schoolYearId, items)
   },
   seating: {
-    confirm: (schoolYearId, classroomLayoutId, students, desks, assignments) => ipcRenderer.invoke("seating:confirm", schoolYearId, classroomLayoutId, students, desks, assignments),
+    confirm: (schoolYearId, classroomLayoutId, students, desks, assignments, semester, occurredOn) => ipcRenderer.invoke("seating:confirm", schoolYearId, classroomLayoutId, students, desks, assignments, semester, occurredOn),
     generate: (schoolYearId, students, desks) => ipcRenderer.invoke("seating:generate", schoolYearId, students, desks),
     evaluate: (schoolYearId, students, desks, assignments) => ipcRenderer.invoke("seating:evaluate", schoolYearId, students, desks, assignments)
   },

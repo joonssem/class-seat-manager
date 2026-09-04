@@ -32,7 +32,7 @@ describe("SQLite database integration", () => {
     const migrations = database.prepare("SELECT version FROM schema_migration ORDER BY version").all() as Array<{ version: number }>;
     const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>;
 
-    expect(migrations.map((row) => row.version)).toEqual([1, 2, 3]);
+    expect(migrations.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
     expect(tables.map((row) => row.name)).toEqual(expect.arrayContaining(["school_year", "student", "seat", "seating_session", "cafeteria_session"]));
     database.close();
   });

@@ -1,4 +1,8 @@
 node_modules/
+.tools/
+.node-gyp/
+.npm-cache/
+out/
 dist/
 dist-electron/
 release/
