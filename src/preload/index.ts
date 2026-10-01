@@ -48,6 +48,10 @@ const api: AppApi = {
     list: (schoolYearId, semester) => ipcRenderer.invoke("leadership:list", schoolYearId, semester),
     save: (schoolYearId, semester, studentIds) => ipcRenderer.invoke("leadership:save", schoolYearId, semester, studentIds)
   },
+  print: {
+    page: () => ipcRenderer.invoke("print:page"),
+    savePdf: (label) => ipcRenderer.invoke("print:save-pdf", label)
+  },
   backup: {
     export: () => ipcRenderer.invoke("backup:export"),
     restore: () => ipcRenderer.invoke("backup:restore")

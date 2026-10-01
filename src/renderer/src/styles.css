@@ -106,8 +106,7 @@ textarea { min-height: 84px; resize: vertical; }
 .assignment-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eef2f7; } .assignment-row strong { color: #2563eb; }
 .reason-box { margin-top: 20px; padding: 14px; background: #f8fafc; border-radius: 10px; font-size: 13px; } .reason-box ul { margin-bottom: 0; padding-left: 20px; line-height: 1.7; }
 .pair-detail-list { display: grid; gap: 7px; margin: 20px 0; }.pair-detail-list h3 { margin: 0; }.pair-detail-list .muted { margin: 0 0 4px; }.pair-detail { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; padding: 9px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; color: #334155; font-size: 12px; text-align: left; }.pair-detail:hover, .pair-detail.active { background: #fff7ed; border-color: #d97706; }.pair-detail span { font-weight: 900; }.pair-detail.satisfied span { color: #047857; }.pair-detail.warning span { color: #b45309; }.pair-detail.violation span { color: #b91c1c; }.pair-detail strong, .pair-detail small { display: block; }.pair-detail small { margin-top: 2px; color: #64748b; }.pair-detail em { color: #475569; font-style: normal; }
-.chart-toolbar { display: flex; justify-content: end; margin-bottom: 16px; } .seat-chart { position: relative; min-height: 620px; background: #f8fafc; border: 2px solid #cbd5e1; border-radius: 16px; } .chart-board { position: absolute; left: 20%; top: 4%; width: 60%; height: 6%; display: flex; align-items: center; justify-content: center; background: #334155; color: white; border-radius: 7px; font-weight: 800; } .chart-cell { position: absolute; display: flex; align-items: center; justify-content: center; padding: 4px; background: white; border: 1px solid #2563eb; border-radius: 8px; color: #1e3a8a; font-size: 13px; font-weight: 800; text-align: center; } .no-print { }
-@media print { @page { size: A4 landscape; margin: 10mm; } .no-print { display: none !important; } .app-shell { max-width: none; padding: 0; } .print-page .seat-chart { min-height: 0; height: 175mm; border-color: #94a3b8; break-inside: avoid; } .print-page .chart-cell { min-height: 48px; border-color: #475569; color: #111827; font-size: 12pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+.chart-toolbar { display: flex; justify-content: end; margin-bottom: 16px; } .no-print { }
 @media (max-width: 800px) { .candidate-detail, .candidate-layout { grid-template-columns: 1fr; } .candidate-tabs { overflow-x: auto; } .candidate-board { min-height: 500px; } }
 @media (max-width: 800px) { .status-banner { align-items: flex-start; flex-wrap: wrap; }.status-banner__action { width: 100%; margin-left: 44px; }.status-banner__action .ui-button { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
@@ -115,7 +114,38 @@ textarea { min-height: 84px; resize: vertical; }
 @media (max-width: 800px) { .result-heading { flex-direction: column; }.result-heading button { width: 100%; } }
 @media (max-width: 800px) { .manual-grid { grid-template-columns: repeat(2, 1fr); } .manual-toolbar, .manual-footer { align-items: start; flex-direction: column; } }
 @media (max-width: 900px) { .editor-layout { grid-template-columns: 1fr; } .classroom-canvas { min-height: 500px; } }
-.chart-board.teacher-board { top: auto; bottom: 4%; }
 
 .option-check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin-right: 12px; }
 .option-check input { width: 18px; height: 18px; }
+.history-import-toggle { margin-top: 18px; }
+.history-import-toggle > summary { cursor: pointer; color: var(--primary); font-weight: 700; padding: 8px 0; }
+.semester-auto, .print-message { align-self: center; color: var(--text-muted); font-size: 13px; margin-left: 8px; }
+
+/* 자리표: 제목 + 칠판 영역 + 좌석 영역을 세로로 쌓고, 좌석은 내용 영역에 맞춰 가운데 정렬한다. */
+.seat-chart { display: flex; flex-direction: column; gap: 10px; background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px 22px 22px; min-height: 640px; }
+.chart-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 2px solid #334155; }
+.chart-title h2 { margin: 0; font-size: 22px; }
+.chart-title span { color: #475569; font-size: 14px; }
+.chart-frame { flex: 1; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.chart-board { align-self: center; width: 62%; flex: none; padding: 7px 0; text-align: center; background: #334155; color: #fff; border-radius: 6px; font-weight: 800; letter-spacing: 0.4em; }
+.chart-stage { position: relative; flex: 1; min-height: 480px; }
+.chart-cell { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 6px; background: #fff; border: 1.5px solid #475569; border-radius: 8px; text-align: center; overflow: hidden; }
+.chart-no { color: #64748b; font-size: 12px; font-weight: 600; line-height: 1; }
+.chart-name { color: #0f172a; font-size: 17px; font-weight: 800; line-height: 1.15; word-break: keep-all; }
+.chart-cell--empty { border-style: dashed; border-color: #94a3b8; }
+.chart-cell--empty .chart-name { color: #94a3b8; font-size: 13px; font-weight: 600; }
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body { background: #fff !important; }
+  .no-print { display: none !important; }
+  .app-shell { max-width: none; padding: 0; margin: 0; }
+  .print-page .seat-chart { height: 188mm; min-height: 0; padding: 0; border: 0; border-radius: 0; gap: 6mm; break-inside: avoid; }
+  .print-page .chart-title h2 { font-size: 20pt; }
+  .print-page .chart-title span { font-size: 11pt; }
+  .print-page .chart-board { font-size: 13pt; padding: 2.2mm 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-page .chart-stage { min-height: 0; }
+  .print-page .chart-cell { border: 0.4mm solid #334155; border-radius: 2mm; }
+  .print-page .chart-no { font-size: 10pt; }
+  .print-page .chart-name { font-size: 16pt; }
+  .print-page .chart-cell--empty .chart-name { font-size: 11pt; }
+}

@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { z } from "zod";
 import { join } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { LANDSCAPE_PRINT_OPTIONS, chartPdfFileName } from "./system/print-options";
 import type { AppInfo, SeatingOptions } from "../shared/contracts/app";
 import { StudentService } from "../application/student-service";
 import type { StudentInput } from "../domain/student-validation";
@@ -109,6 +111,15 @@ function registerIpc(): void {
   ipcMain.handle("cafeteria:assignments", (_event, sessionId: string) => cafeteriaService.assignments(parseIpc(z.string().trim().min(1), sessionId, "급식실 회차 ID")));
   ipcMain.handle("leadership:list", (_event, schoolYearId: string, semester: number) => leadershipService.list(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(z.number().int().min(1).max(2), semester, "학기")));
   ipcMain.handle("leadership:save", (_event, schoolYearId: string, semester: number, studentIds: string[]) => leadershipService.save(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(z.number().int().min(1).max(2), semester, "학기"), parseIpc(studentIdSchema.array().length(4), studentIds, "인솔 학생")));
+  ipcMain.handle("print:page", (event) => new Promise<boolean>((resolve) => {
+    event.sender.print({ silent: false, ...LANDSCAPE_PRINT_OPTIONS }, (success) => resolve(success));
+  }));
+  ipcMain.handle("print:save-pdf", async (event, label: string) => {
+    const selected = await dialog.showSaveDialog({ title: "자리표 PDF 저장", defaultPath: chartPdfFileName(parseIpc(z.string().trim().max(60), label, "파일 이름")), filters: [{ name: "PDF", extensions: ["pdf"] }] });
+    if (selected.canceled || !selected.filePath) return null;
+    await writeFile(selected.filePath, await event.sender.printToPDF({ ...LANDSCAPE_PRINT_OPTIONS, preferCSSPageSize: true }));
+    return selected.filePath;
+  });
   ipcMain.handle("backup:export", async () => { const selected = await dialog.showSaveDialog({ title: "자리배치 데이터 백업", defaultPath: "class-seat-manager-backup.sqlite", filters: [{ name: "SQLite 백업", extensions: ["sqlite"] }] }); return selected.canceled || !selected.filePath ? null : backupService.export(selected.filePath); });
   ipcMain.handle("backup:restore", async () => { const selected = await dialog.showOpenDialog({ title: "자리배치 백업 복원", properties: ["openFile"], filters: [{ name: "SQLite 백업", extensions: ["sqlite"] }] }); if (selected.canceled || !selected.filePaths[0]) return null; const confirmed = await dialog.showMessageBox({ type: "warning", buttons: ["복원", "취소"], defaultId: 1, cancelId: 1, title: "백업 복원 확인", message: "현재 로컬 데이터가 백업 파일로 교체됩니다.", detail: "복원 전 현재 데이터의 안전 백업을 자동으로 만든 뒤 앱을 재시작합니다." }); if (confirmed.response !== 0) return null; const source = selected.filePaths[0]; const safetyBackup = backupService.createRestoreSafetyBackup(); database?.close(); backupService.restore(source); app.relaunch({ args: [`--restored-from=${source}`, `--safety-backup=${safetyBackup}`] }); app.exit(0); return source; });
 }

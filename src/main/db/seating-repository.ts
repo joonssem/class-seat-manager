@@ -6,7 +6,7 @@ interface SqliteDatabase { prepare(sql: string): Statement; exec(sql: string): v
 
 export class SqliteSeatingRepository implements SeatingRepository {
   constructor(private readonly database: SqliteDatabase) {}
-  nextSequence(schoolYearId: string, semester: number): number { const row = this.database.prepare("SELECT COALESCE(MAX(sequence_no), 0) AS max_sequence FROM seating_session WHERE school_year_id = ? AND semester = ? AND status = 'confirmed'").get(schoolYearId, semester); return Number(row?.max_sequence ?? 0) + 1; }
+  nextSequence(schoolYearId: string): number { const row = this.database.prepare("SELECT COALESCE(MAX(sequence_no), 0) AS max_sequence FROM seating_session WHERE school_year_id = ?").get(schoolYearId); return Number(row?.max_sequence ?? 0) + 1; }
   saveConfirmed(input: { seatingSessionId: string; schoolYearId: string; classroomLayoutId: string; semester: number; sequenceNo: number; occurredOn: string; assignments: Array<SeatingAssignment & { positionSnapshot: object; displayNameSnapshot: string; studentNumberSnapshot: number }> }): void {
     const now = new Date().toISOString();
     this.database.exec("BEGIN");

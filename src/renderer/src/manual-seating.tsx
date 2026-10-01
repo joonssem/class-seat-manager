@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import type { LayoutItem } from "../../domain/classroom-layout";
 import type { SeatingAssignment, Student } from "../../domain/models";
+import { semesterOf } from "../../domain/semester";
 import type { SeatingOptions } from "../../shared/contracts/app";
 import { Button, ConfirmDialog, StatusBanner, Toast } from "./ui";
 
@@ -10,8 +11,8 @@ export function ManualSeating({ schoolYearId, onBack, initialAssignments = [], o
   const [students, setStudents] = useState<Student[]>([]);
   const [desks, setDesks] = useState<LayoutItem[]>([]);
   const [layoutId, setLayoutId] = useState("");
-  const [semester, setSemester] = useState<1 | 2>(2);
   const [occurredOn, setOccurredOn] = useState(new Date().toISOString().slice(0, 10));
+  const semester = semesterOf(occurredOn) ?? 1;
   const [assignments, setAssignments] = useState<Record<string, string>>(() => Object.fromEntries(initialAssignments.map((item) => [item.seatId, item.studentId])));
   const [score, setScore] = useState<number | null>(null);
   const [message, setMessage] = useState("");
@@ -50,14 +51,14 @@ export function ManualSeating({ schoolYearId, onBack, initialAssignments = [], o
   const saveConfirmed = (): void => {
     const currentRows = rows();
     setIsSaving(true);
-    void window.appApi.seating.confirm(schoolYearId, layoutId, students, desks, currentRows, semester, occurredOn).then((sequence) => { const savedMessage = `${semester}학기 ${sequence}차 자리배치로 확정 저장했습니다.`; setMessage(savedMessage); setToast(savedMessage); setDirty(false); setShowConfirmDialog(false); onConfirmed?.(currentRows); onPreview(currentRows); }).catch((reason: unknown) => setMessage(reason instanceof Error ? reason.message : "자리배치 확정에 실패했습니다.")).finally(() => setIsSaving(false));
+    void window.appApi.seating.confirm(schoolYearId, layoutId, students, desks, currentRows, semester, occurredOn).then((sequence) => { const savedMessage = `${semester}학기 자리배치를 확정 저장했습니다. (전체 ${sequence}번째 기록)`; setMessage(savedMessage); setToast(savedMessage); setDirty(false); setShowConfirmDialog(false); onConfirmed?.(currentRows); onPreview(currentRows); }).catch((reason: unknown) => setMessage(reason instanceof Error ? reason.message : "자리배치 확정에 실패했습니다.")).finally(() => setIsSaving(false));
   };
   const requestBack = (): void => { if (dirty) setShowExitConfirm(true); else onBack(); };
   const reset = (): void => { setAssignments({}); setScore(null); setDirty(true); setMessage("배치를 초기화했습니다. 저장하려면 자리 배치 확정을 선택하세요."); setShowResetConfirm(false); };
 
   return <main className="app-shell">
     <header className="topbar"><div><button type="button" className="back-button" onClick={requestBack}>← 대시보드</button><h1>수동 자리배치</h1></div><div className="year-badge">학생 {students.length}명 · 좌석 {desks.length}개</div></header>
-    <section className="manual-toolbar"><div><strong>배치 상태</strong><span className={unassigned.length || duplicateCount ? "warning-text" : "success-text"}>{dirty ? "저장되지 않은 변경사항 · " : "모든 변경사항이 저장됨 · "}{unassigned.length ? `미배정 ${unassigned.length}명` : "모든 학생 배정 완료"}{duplicateCount ? ` · 중복 ${duplicateCount}건` : ""}{score !== null ? ` · 현재 점수 ${score}점` : ""}</span></div><span className="muted">학생을 자리 카드로 끌어 놓으면 서로 교환됩니다.</span><div className="manual-confirm-controls"><label>학기<select value={semester} onChange={(event) => setSemester(Number(event.target.value) as 1 | 2)}><option value="1">1학기</option><option value="2">2학기</option></select></label><label>배치일<input type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} /></label><Button variant="secondary" onClick={() => setShowResetConfirm(true)}>배치 초기화</Button></div></section>
+    <section className="manual-toolbar"><div><strong>배치 상태</strong><span className={unassigned.length || duplicateCount ? "warning-text" : "success-text"}>{dirty ? "저장되지 않은 변경사항 · " : "모든 변경사항이 저장됨 · "}{unassigned.length ? `미배정 ${unassigned.length}명` : "모든 학생 배정 완료"}{duplicateCount ? ` · 중복 ${duplicateCount}건` : ""}{score !== null ? ` · 현재 점수 ${score}점` : ""}</span></div><span className="muted">학생을 자리 카드로 끌어 놓으면 서로 교환됩니다.</span><div className="manual-confirm-controls"><label>배치일<input type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} /></label><span className="semester-auto" aria-live="polite">{semesterOf(occurredOn) ? `${semester}학기로 자동 분류` : "날짜를 입력하세요"}</span><Button variant="secondary" onClick={() => setShowResetConfirm(true)}>배치 초기화</Button></div></section>
     {message && <StatusBanner tone={message.includes("확정 저장") ? "success" : "warning"} title={message.includes("확정 저장") ? "자리배치가 저장되었습니다" : message.includes("초기화") ? "저장되지 않은 변경사항" : "확인해 주세요"}>{message}</StatusBanner>}
     <section className="manual-grid">{desks.map((desk) => { const assignedStudent = students.find((student) => student.studentId === assignments[desk.id]); return <article className="manual-seat" key={desk.id} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropStudent(event, desk.id)}><div className="seat-label">{desk.id.replace("seat-", "좌석 ")}</div>{assignedStudent && <div className="assigned-student" draggable onDragStart={(event) => { event.dataTransfer.setData("text/student-id", assignedStudent.studentId); }}><strong>{assignedStudent.studentNumber}. {assignedStudent.name}</strong></div>}<select aria-label={`${desk.id} 학생`} value={assignments[desk.id] ?? ""} onChange={(event) => update(desk.id, event.target.value)}><option value="">학생 선택</option>{students.map((student) => <option key={student.studentId} value={student.studentId}>{student.studentNumber}. {student.name}{assignedIds.has(student.studentId) && assignments[desk.id] !== student.studentId ? " (자리 이동)" : ""}</option>)}</select></article>; })}</section>
     {!desks.length && <section className="welcome-card"><div><h2>저장된 책상이 없습니다</h2><p>교실 배치 편집에서 책상을 추가하고 저장하세요.</p></div></section>}

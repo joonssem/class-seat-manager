@@ -24,6 +24,7 @@ export const evaluation = {
 export function installAppApi(overrides: Partial<{ generate: AppApi["seating"]["generate"]; evaluate: AppApi["seating"]["evaluate"] }> = {}) {
   const api = {
     students: { list: vi.fn().mockResolvedValue(students) },
+    print: { page: vi.fn().mockResolvedValue(true), savePdf: vi.fn().mockResolvedValue("C:/x.pdf") },
     classroom: { get: vi.fn().mockResolvedValue({ classroomLayoutId: "layout", schoolYearId: "sy", items: desks }) },
     seating: {
       cancelGenerate: vi.fn().mockResolvedValue(undefined),

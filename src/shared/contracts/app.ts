@@ -47,5 +47,6 @@ export interface AppApi {
   constraints: { get(schoolYearId: string): Promise<ConstraintSet>; save(schoolYearId: string, set: ConstraintSet): Promise<ConstraintSet>; };
   cafeteria: { confirm(schoolYearId: string, semester: number, assignments: CafeteriaAssignment[]): Promise<number>; history(schoolYearId: string): Promise<CafeteriaHistoryRow[]>; assignments(sessionId: string): Promise<CafeteriaAssignment[]>; };
   leadership: { list(schoolYearId: string, semester: number): Promise<string[]>; save(schoolYearId: string, semester: number, studentIds: string[]): Promise<string[]>; };
+  print: { page(): Promise<boolean>; savePdf(label: string): Promise<string | null>; };
   backup: { export(): Promise<string | null>; restore(): Promise<string | null>; };
 }
