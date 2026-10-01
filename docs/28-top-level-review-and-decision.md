@@ -28,3 +28,8 @@
 - 진행/취소의 IPC 경로(main→renderer 이벤트)는 자동 테스트가 없고 실행 확인이 필요하다.
 - 학년도 전환·보관 화면(FR-01)은 만들지 않기로 결정했다. 해마다 학급 구성이 바뀌므로 학년도 간 이력 연속성이 필요 없고, 새 학년에는 새로 시작한다.
 - 통계는 `자주 가까이 앉은 짝`까지 구현했다(bf37741). 인쇄 검증(Phase 12)은 실제 프린터/PDF 확인이 필요하다.
+
+## 패키징 검증 (2026-10-01)
+- `npm run package:win`이 처음에는 실패했다: `electron`이 `dependencies`에 있었다(electron-builder는 devDependencies만 허용). 이동 후 NSIS 설치 파일(`dist/학급 자리배치 도우미 Setup 0.1.0.exe`)이 생성된다.
+- 패키징된 앱을 임시 userData(`--user-data-dir`)로 실행해 DB 파일이 생성되고 마이그레이션으로 테이블 15개가 만들어지는 것을 확인했다. `better_sqlite3.node`는 `app.asar.unpacked`에 포함된다.
+- 미해결: 앱 아이콘 미설정(기본 Electron 아이콘), 코드 서명 없음(학교 PC 보안 경고 가능). 설치 후 실제 화면 동작은 직접 확인이 필요하다.
