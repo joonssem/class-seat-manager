@@ -14,6 +14,7 @@ import { SeatingService } from "../application/seating-service";
 import { SqliteSeatingRepository } from "./db/seating-repository";
 import { SeatingHistoryService } from "../application/seating-history-service";
 import { SqliteSeatingHistoryRepository } from "./db/seating-history-repository";
+import { pairProximityStats } from "../domain/pair-proximity-stats";
 import { evaluateAllocation, generateCandidatesAsync } from "../domain/seating-engine";
 import { calculateSeatPosition } from "../domain/classroom-layout";
 import type { LayoutItem } from "../domain/classroom-layout";
@@ -98,6 +99,7 @@ function registerIpc(): void {
   ipcMain.handle("history:list", (_event, schoolYearId: string, semester?: number) => historyService.list(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), semester === undefined ? undefined : parseIpc(z.number().int().min(1).max(2), semester, "학기")));
   ipcMain.handle("history:experience", (_event, schoolYearId: string, semester?: number) => historyService.experience(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), semester === undefined ? undefined : parseIpc(z.number().int().min(1).max(2), semester, "학기")));
   ipcMain.handle("history:assignments", (_event, sessionId: string) => historyService.assignments(parseIpc(z.string().trim().min(1), sessionId, "자리배치 회차 ID")));
+  ipcMain.handle("history:pair-proximity", (_event, schoolYearId: string, desks: LayoutItem[]) => { const id = parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"); return pairProximityStats(historyService.confirmedSessions(id), toSeats(parseIpc(layoutItemSchema.array().max(500), desks, "교실 요소"))); });
   ipcMain.handle("history:latest-assignments", (_event, schoolYearId: string) => historyService.latestAssignments(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID")));
   ipcMain.handle("history:import-historical", (_event, schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], sessions: Array<{ semester: number; occurredOn: string; assignments: SeatingAssignment[] }>) => seatingService.confirmBatch(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(z.string().trim().min(1), classroomLayoutId, "교실 배치 ID"), parseIpc(studentSchema.array().max(100), students, "학생 목록"), parseIpc(layoutItemSchema.array().max(500), desks, "교실 요소"), sessions));
   ipcMain.handle("constraints:save", (_event, schoolYearId: string, set) => constraintService.save(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(constraintSetSchema, set, "자리 조건")));

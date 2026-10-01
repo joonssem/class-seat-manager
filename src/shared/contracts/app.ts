@@ -5,6 +5,7 @@ import type { AllocationCandidate, SeatingAssignment, Student } from "../../doma
 import type { SeatingHistoryRow, StudentExperienceRow } from "../../application/seating-history-service";
 import type { ConstraintSet } from "../../application/constraint-service";
 import type { CafeteriaAssignment } from "../../domain/cafeteria-engine";
+import type { PairProximityStat } from "../../domain/pair-proximity-stats";
 import type { CafeteriaHistoryRow } from "../../application/cafeteria-service";
 
 export interface AppInfo {
@@ -42,7 +43,7 @@ export interface AppApi {
     onGenerateProgress(listener: (progress: { completed: number; total: number }) => void): () => void;
     evaluate(schoolYearId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[], options?: SeatingOptions): Promise<AllocationCandidate["evaluation"]>;
   };
-  history: { list(schoolYearId: string, semester?: number): Promise<SeatingHistoryRow[]>; experience(schoolYearId: string, semester?: number): Promise<StudentExperienceRow[]>; assignments(sessionId: string): Promise<SeatingAssignment[]>; latestAssignments(schoolYearId: string): Promise<SeatingAssignment[]>; importHistorical(schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], sessions: Array<{ semester: number; occurredOn: string; assignments: SeatingAssignment[] }>): Promise<number[]>; };
+  history: { list(schoolYearId: string, semester?: number): Promise<SeatingHistoryRow[]>; experience(schoolYearId: string, semester?: number): Promise<StudentExperienceRow[]>; assignments(sessionId: string): Promise<SeatingAssignment[]>; latestAssignments(schoolYearId: string): Promise<SeatingAssignment[]>; pairProximity(schoolYearId: string, desks: LayoutItem[]): Promise<PairProximityStat[]>; importHistorical(schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], sessions: Array<{ semester: number; occurredOn: string; assignments: SeatingAssignment[] }>): Promise<number[]>; };
   constraints: { get(schoolYearId: string): Promise<ConstraintSet>; save(schoolYearId: string, set: ConstraintSet): Promise<ConstraintSet>; };
   cafeteria: { confirm(schoolYearId: string, semester: number, assignments: CafeteriaAssignment[]): Promise<number>; history(schoolYearId: string): Promise<CafeteriaHistoryRow[]>; assignments(sessionId: string): Promise<CafeteriaAssignment[]>; };
   leadership: { list(schoolYearId: string, semester: number): Promise<string[]>; save(schoolYearId: string, semester: number, studentIds: string[]): Promise<string[]>; };

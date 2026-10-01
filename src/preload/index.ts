@@ -31,7 +31,8 @@ const api: AppApi = {
     list: (schoolYearId, semester) => ipcRenderer.invoke("history:list", schoolYearId, semester),
     experience: (schoolYearId, semester) => ipcRenderer.invoke("history:experience", schoolYearId, semester),
     assignments: (sessionId) => ipcRenderer.invoke("history:assignments", sessionId),
-    latestAssignments: (schoolYearId) => ipcRenderer.invoke("history:latest-assignments", schoolYearId)
+    latestAssignments: (schoolYearId) => ipcRenderer.invoke("history:latest-assignments", schoolYearId),
+    pairProximity: (schoolYearId, desks) => ipcRenderer.invoke("history:pair-proximity", schoolYearId, desks)
     ,importHistorical: (schoolYearId, classroomLayoutId, students, desks, sessions) => ipcRenderer.invoke("history:import-historical", schoolYearId, classroomLayoutId, students, desks, sessions)
   },
   constraints: {
