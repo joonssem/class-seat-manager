@@ -16,6 +16,7 @@ export const desks: LayoutItem[] = [
 export const evaluation = {
   totalPenalty: 1, score: 88, hardViolations: [], reasonCodes: [],
   breakdown: { sameSeat: 0, repeatProximity: 0, genderAdjacency: 0.5, positionExperience: 0, studentPosition: 0, pairDistance: 0, groupActivity: 0 },
+  relative: { sameSeat: 0, repeatProximity: 0, genderAdjacency: 0.5, positionExperience: 0, studentPosition: 0, pairDistance: 0, groupActivity: 0 },
   conditionSummary: [{ group: "성별 균형", label: "성별 인접", status: "warning" as const, detail: "가까운 좌석의 같은 성별 인접을 반영했습니다.", penalty: 0.5 }],
   pairDetails: [{ studentAId: "s1", studentAName: "김하나", studentBId: "s2", studentBName: "이두리", seatAId: "seat-1", seatBId: "seat-2", type: "가능한 한 멀리" as const, strength: "가급적" as const, currentDistance: 0.2, targetDistance: 0.9, relation: "옆자리", risk: 0.9, status: "warning" as const }]
 };

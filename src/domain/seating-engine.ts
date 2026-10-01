@@ -9,6 +9,7 @@ import type {
   Student
 } from "./models";
 import { columnGroups } from "./seat-groups";
+import { gridDistance, gridSpacing, type GridSpacing } from "./seat-grid";
 import { DEFAULT_PROXIMITY, seatProximity, type SeatProximity } from "./seat-proximity";
 
 const DEFAULT_SETTINGS: EngineSettings = {
@@ -21,8 +22,8 @@ const DEFAULT_SETTINGS: EngineSettings = {
     genderAdjacency: 40,
     positionExperience: 15,
     studentPosition: 10,
-    pairDistance: 5,
-    groupActivity: 10
+    pairDistance: 15,
+    groupActivity: 25
   },
   groupActivity: false,
   restartCount: 12,
@@ -154,7 +155,7 @@ function historyGroupmates(history: ConfirmedSeatingSession[], groupOfSeat: Map<
 }
 
 function pairKey(a: string, b: string): string {
-  return [a, b].sort().join("::");
+  return a < b ? `${a}::${b}` : `${b}::${a}`;
 }
 
 function positionValue(seat: Seat, tag: string): string | boolean | undefined {
@@ -178,16 +179,75 @@ export function validateAllocation(input: AllocationInput, assignments: SeatingA
   return [...new Set(errors)];
 }
 
-export function evaluateAllocation(input: AllocationInput, assignments: SeatingAssignment[]): Evaluation {
+interface EvalContext {
+  settings: EngineSettings;
+  students: Student[];
+  seats: Seat[];
+  byStudent: Map<string, Student>;
+  bySeat: Map<string, Seat>;
+  maxSeatDistance: number;
+  proximityOf: (a: Seat, b: Seat) => SeatProximity;
+  nearPairs: Map<string, number>;
+  pairIndex: Map<string, NonNullable<AllocationInput["pairConstraints"]>>;
+  spacing: GridSpacing;
+  seatCounts: Map<string, number>;
+  positionHistory: Map<string, Array<{ seat: Seat; weight: number }>>;
+  groups: string[][];
+  pastGroupmates: Map<string, number>;
+  genderTotals: Record<Student["gender"], number>;
+}
+
+const contextCache = new WeakMap<AllocationInput, EvalContext>();
+
+/** 한 번의 후보 생성 동안 바뀌지 않는 값(이력 집계, 좌석 간 관계 등)을 입력당 한 번만 계산한다. */
+function getContext(input: AllocationInput): EvalContext {
+  const cached = contextCache.get(input);
+  if (cached) return cached;
   const settings = mergeSettings(input.settings);
   const students = activeStudents(input.students);
   const seats = input.seats.filter((seat) => seat.isActive);
-  const byStudent = new Map(students.map((student) => [student.studentId, student]));
   const bySeat = seatById(seats);
-  const maxSeatDistance = maximumSeatDistance(seats);
-  const assignmentMap = assignmentToMap(assignments);
   const proximityOf = createProximityLookup(seats, settings);
-  const nearPairs = historyNearPairs(input.history, seats, proximityOf, settings.timeDecayLambda);
+  const pairIndex: EvalContext["pairIndex"] = new Map();
+  for (const constraint of input.pairConstraints ?? []) {
+    const key = pairKey(constraint.studentAId, constraint.studentBId);
+    pairIndex.set(key, [...(pairIndex.get(key) ?? []), constraint]);
+  }
+  const seatCounts = new Map<string, number>();
+  const positionHistory: EvalContext["positionHistory"] = new Map();
+  for (const [sessionIndex, session] of input.history.entries()) {
+    const weight = historyWeight(sessionIndex, input.history.length, settings.timeDecayLambda);
+    for (const assignment of session.assignments) {
+      const key = `${assignment.studentId}|${assignment.seatId}`;
+      seatCounts.set(key, (seatCounts.get(key) ?? 0) + weight);
+      const seat = bySeat.get(assignment.seatId);
+      if (seat) positionHistory.set(assignment.studentId, [...(positionHistory.get(assignment.studentId) ?? []), { seat, weight }]);
+    }
+  }
+  const groups = settings.groupActivity ? columnGroups(seats) : [];
+  const groupOfSeat = new Map<string, number>(groups.flatMap((group, index) => group.map((seatId) => [seatId, index] as const)));
+  const context: EvalContext = {
+    settings, students, seats,
+    byStudent: new Map(students.map((student) => [student.studentId, student])),
+    bySeat,
+    maxSeatDistance: maximumSeatDistance(seats),
+    proximityOf,
+    nearPairs: historyNearPairs(input.history, seats, proximityOf, settings.timeDecayLambda),
+    pairIndex,
+    spacing: gridSpacing(seats),
+    seatCounts,
+    positionHistory,
+    groups,
+    pastGroupmates: settings.groupActivity ? historyGroupmates(input.history, groupOfSeat, settings.timeDecayLambda) : new Map(),
+    genderTotals: { 남: students.filter((student) => student.gender === "남").length, 여: students.filter((student) => student.gender === "여").length }
+  };
+  contextCache.set(input, context);
+  return context;
+}
+
+function evaluateRaw(input: AllocationInput, assignments: SeatingAssignment[]): Evaluation {
+  const { settings, students, seats, byStudent, bySeat, maxSeatDistance, proximityOf, nearPairs, pairIndex, spacing, seatCounts, positionHistory } = getContext(input);
+  const assignmentMap = assignmentToMap(assignments);
   const breakdown = { sameSeat: 0, repeatProximity: 0, genderAdjacency: 0, positionExperience: 0, studentPosition: 0, pairDistance: 0, groupActivity: 0 };
   const reasonCodes: string[] = [];
   const hardViolations = validateAllocation(input, assignments);
@@ -197,11 +257,11 @@ export function evaluateAllocation(input: AllocationInput, assignments: SeatingA
   for (const student of students) {
     const seat = bySeat.get(assignmentMap.get(student.studentId) ?? "");
     if (!seat) continue;
-    const same = historySeatCount(student.studentId, seat.seatId, input.history, settings.timeDecayLambda);
+    const same = seatCounts.get(`${student.studentId}|${seat.seatId}`) ?? 0;
     breakdown.sameSeat += same / historyLength;
-    const newcomer = input.history.length < settings.newcomerRelaxedSessions && !input.history.some((s) => s.assignments.some((a) => a.studentId === student.studentId));
+    const newcomer = input.history.length < settings.newcomerRelaxedSessions && !positionHistory.has(student.studentId);
     if (!newcomer) {
-      breakdown.positionExperience += samePositionPenalty(student.studentId, seat, input.history, seats, settings.timeDecayLambda);
+      breakdown.positionExperience += samePositionPenalty(seat, positionHistory.get(student.studentId) ?? []);
     }
     for (const constraint of input.seatConstraints ?? []) {
       if (constraint.studentId !== student.studentId) continue;
@@ -223,7 +283,6 @@ export function evaluateAllocation(input: AllocationInput, assignments: SeatingA
       const studentA = byStudent.get(a.studentId);
       const studentB = byStudent.get(b.studentId);
       if (!seatA || !seatB || !studentA || !studentB) continue;
-      const currentDistance = distance(seatA, seatB);
       const closeness = proximityOf(seatA, seatB);
       if (closeness.risk > 0 && studentA.gender === studentB.gender) {
         breakdown.genderAdjacency += closeness.risk;
@@ -232,8 +291,8 @@ export function evaluateAllocation(input: AllocationInput, assignments: SeatingA
       const pair = pairKey(a.studentId, b.studentId);
       const oldNear = nearPairs.get(pair) ?? 0;
       if (closeness.risk > 0 && oldNear > 0) breakdown.repeatProximity += oldNear * closeness.risk;
-      for (const constraint of input.pairConstraints ?? []) {
-        if (pairKey(constraint.studentAId, constraint.studentBId) !== pair) continue;
+      for (const constraint of pairIndex.get(pair) ?? []) {
+        const currentDistance = constraint.type === "최소 거리" ? gridDistance(seatA, seatB, spacing) : distance(seatA, seatB);
         if (constraint.type === "가능한 한 멀리") {
           const normalizedShortfall = closeness.risk;
           const multiplier = constraint.strength === "필수" ? 10 : constraint.strength === "가급적" ? 3 : 1;
@@ -254,25 +313,27 @@ export function evaluateAllocation(input: AllocationInput, assignments: SeatingA
   }
 
   if (settings.groupActivity) {
-    const groups = columnGroups(seats);
-    const groupOfSeat = new Map<string, number>(groups.flatMap((group, index) => group.map((seatId) => [seatId, index] as const)));
-    const pastGroupmates = historyGroupmates(input.history, groupOfSeat, settings.timeDecayLambda);
+    const { groups, pastGroupmates, genderTotals } = getContext(input);
     const studentBySeat = new Map([...assignmentMap].map(([studentId, seatId]) => [seatId, byStudent.get(studentId)]));
     for (const group of groups) {
       const members = group.map((seatId) => studentBySeat.get(seatId)).filter((student): student is Student => Boolean(student));
-      if (members.length >= 3) {
-        const males = members.filter((student) => student.gender === "남").length;
-        if (males === 0 || males === members.length) {
-          breakdown.groupActivity += 1;
-          reasonCodes.push(`세로 모둠(${members.map((student) => student.name).join("·")})이 한 성별로만 구성됨`);
+      for (const gender of ["남", "여"] as const) {
+        // 해당 성별 학생 수가 모둠 수 이상일 때만 "모든 모둠에 있어야 한다"가 가능하다.
+        const total = genderTotals[gender];
+        if (members.length < 3 || total < groups.length) continue;
+        const count = members.filter((student) => student.gender === gender).length;
+        const expected = Math.floor((members.length * total) / students.length);
+        breakdown.groupActivity += Math.max(0, expected - count);
+        if (count === 0) {
+          breakdown.groupActivity += 3;
+          reasonCodes.push(`세로 모둠(${members.map((student) => student.name).join("·")})에 ${gender}학생이 없음`);
         }
       }
       for (let i = 0; i < members.length; i += 1) {
         for (let j = i + 1; j < members.length; j += 1) {
           const key = pairKey(members[i].studentId, members[j].studentId);
           breakdown.groupActivity += pastGroupmates.get(key) ?? 0;
-          for (const constraint of input.pairConstraints ?? []) {
-            if (pairKey(constraint.studentAId, constraint.studentBId) !== key) continue;
+          for (const constraint of pairIndex.get(key) ?? []) {
             breakdown.groupActivity += constraint.strength === "필수" ? 3 : constraint.strength === "가급적" ? 2 : 1;
             reasonCodes.push(`${members[i].name}·${members[j].name}: 같은 세로 모둠에 배치됨`);
           }
@@ -283,7 +344,6 @@ export function evaluateAllocation(input: AllocationInput, assignments: SeatingA
 
   const weighted = settings.weights;
   const totalPenalty = breakdown.sameSeat * weighted.sameSeat + breakdown.repeatProximity * weighted.repeatProximity + breakdown.genderAdjacency * weighted.genderAdjacency + breakdown.positionExperience * weighted.positionExperience + breakdown.studentPosition * weighted.studentPosition + breakdown.pairDistance * weighted.pairDistance + breakdown.groupActivity * weighted.groupActivity;
-  const maxPenalty = Math.max(1, students.length * 100);
   const conditionSummary = [
     { group: "자리 이력", label: "같은 자리 반복", status: breakdown.sameSeat === 0 ? "satisfied" as const : "warning" as const, detail: breakdown.sameSeat === 0 ? "반복된 자리가 없습니다." : "과거에 사용한 자리와 겹치는 정도를 반영했습니다.", penalty: breakdown.sameSeat },
     { group: "자리 이력", label: "과거 근접 반복", status: breakdown.repeatProximity === 0 ? "satisfied" as const : "warning" as const, detail: breakdown.repeatProximity === 0 ? "과거 근접 pair 반복이 없습니다." : "과거에 가까웠던 학생 pair의 반복을 반영했습니다.", penalty: breakdown.repeatProximity },
@@ -293,20 +353,68 @@ export function evaluateAllocation(input: AllocationInput, assignments: SeatingA
     ...(settings.groupActivity ? [{ group: "모둠 활동", label: "세로 모둠 구성", status: breakdown.groupActivity === 0 ? "satisfied" as const : "warning" as const, detail: breakdown.groupActivity === 0 ? "세로 모둠의 성별 구성·이전 모둠 반복·짝 조건에 문제가 없습니다." : "세로 모둠의 성별 구성, 이전 모둠 반복, 짝 조건을 반영했습니다.", penalty: breakdown.groupActivity }] : []),
     { group: "자리 이력", label: "위치 경험", status: breakdown.positionExperience === 0 ? "satisfied" as const : "warning" as const, detail: "과거 앞·중간·뒤 및 좌·중·우 경험을 반영했습니다.", penalty: breakdown.positionExperience }
   ];
-  return { totalPenalty, score: Math.max(0, Math.round(100 - (totalPenalty / maxPenalty) * 100)), hardViolations: [...new Set(hardViolations)], breakdown, reasonCodes: [...new Set(reasonCodes)], conditionSummary, pairDetails };
+  return { totalPenalty, score: 0, hardViolations: [...new Set(hardViolations)], breakdown, relative: { ...breakdown }, reasonCodes: [...new Set(reasonCodes)], conditionSummary, pairDetails };
 }
 
-function samePositionPenalty(studentId: string, seat: Seat, history: ConfirmedSeatingSession[], seats: Seat[], lambda: number): number {
+type BreakdownKey = keyof Evaluation["breakdown"];
+const BREAKDOWN_KEYS: BreakdownKey[] = ["sameSeat", "repeatProximity", "genderAdjacency", "positionExperience", "studentPosition", "pairDistance", "groupActivity"];
+const BASELINE_SAMPLES = 24;
+const baselineCache = new WeakMap<AllocationInput, Evaluation["breakdown"]>();
+
+/** 무작위 배치의 항목별 평균 감점. 항목마다 단위가 달라 이 값으로 나눠 "무작위 대비" 비율로 맞춘다. */
+function randomBaseline(input: AllocationInput): Evaluation["breakdown"] {
+  const cached = baselineCache.get(input);
+  if (cached) return cached;
+  const students = activeStudents(input.students);
+  const seats = input.seats.filter((seat) => seat.isActive);
+  const sum = { sameSeat: 0, repeatProximity: 0, genderAdjacency: 0, positionExperience: 0, studentPosition: 0, pairDistance: 0, groupActivity: 0 };
+  if (students.length && seats.length >= students.length) {
+    const random = seededRandom(20261001);
+    for (let sample = 0; sample < BASELINE_SAMPLES; sample += 1) {
+      const { breakdown } = evaluateRaw(input, mapToAssignments(randomInitialAssignment(students, seats, random)));
+      for (const key of BREAKDOWN_KEYS) sum[key] += breakdown[key] / BASELINE_SAMPLES;
+    }
+  }
+  baselineCache.set(input, sum);
+  return sum;
+}
+
+/**
+ * 총점은 항목별 감점을 무작위 배치 대비 비율로 바꾼 뒤 가중합한다.
+ * 점수 = 100 - 100 * (가중 부담 합 / 적용 가능한 가중치 합). 무작위 수준이면 0점, 감점이 없으면 100점.
+ * 이력·조건이 없어 기준이 0인 항목은 점수에서 제외한다.
+ */
+export function evaluateAllocation(input: AllocationInput, assignments: SeatingAssignment[]): Evaluation {
+  const settings = mergeSettings(input.settings);
+  const raw = evaluateRaw(input, assignments);
+  const baseline = randomBaseline(input);
+  const relative = { ...raw.breakdown };
+  let weightedLoad = 0;
+  let applicableWeight = 0;
+  for (const key of BREAKDOWN_KEYS) {
+    const weight = settings.weights[key];
+    if (baseline[key] > 1e-9) {
+      relative[key] = raw.breakdown[key] / baseline[key];
+      applicableWeight += weight;
+    } else {
+      relative[key] = 0;
+    }
+    weightedLoad += weight * relative[key];
+  }
+  const score = applicableWeight > 0 ? Math.max(0, Math.min(100, Math.round(100 - (weightedLoad / applicableWeight) * 100))) : 100;
+  const labelKey: Record<string, BreakdownKey> = { "같은 자리 반복": "sameSeat", "과거 근접 반복": "repeatProximity", "성별 인접": "genderAdjacency", "학생 위치 조건": "studentPosition", "학생 간 짝 거리": "pairDistance", "위치 경험": "positionExperience", "세로 모둠 구성": "groupActivity" };
+  const conditionSummary = raw.conditionSummary.map((row) => ({ ...row, penalty: relative[labelKey[row.label]] ?? row.penalty }));
+  return { ...raw, totalPenalty: weightedLoad, score, relative, conditionSummary };
+}
+
+function samePositionPenalty(seat: Seat, past: Array<{ seat: Seat; weight: number }>): number {
   const tags: Array<keyof Seat["position"]> = ["vertical", "horizontal", "nearFrontDoor", "nearBackDoor"];
-  const bySeat = seatById(seats);
   let penalty = 0;
   for (const tag of tags) {
-    const count = history.reduce((total, session, sessionIndex) => {
-      const assignment = session.assignments.find((item) => item.studentId === studentId);
-      const historicalSeat = assignment ? bySeat.get(assignment.seatId) : undefined;
-      return total + (historicalSeat ? Number(positionValue(historicalSeat, tag) === positionValue(seat, tag)) * historyWeight(sessionIndex, history.length, lambda) : 0);
-    }, 0);
-    penalty += count;
+    const value = positionValue(seat, tag);
+    // 문 근처 여부는 "문 근처였던 경험"만 반복으로 센다. 문 근처가 아닌 자리끼리 같다고 세면 거의 모든 자리가 겹쳐 상수가 된다.
+    if (value === false) continue;
+    for (const entry of past) if (positionValue(entry.seat, tag) === value) penalty += entry.weight;
   }
   return penalty;
 }

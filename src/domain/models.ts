@@ -124,6 +124,8 @@ export interface Evaluation {
     groupActivity: number;
   };
   reasonCodes: string[];
+  /** 항목별 부담도. 0이면 문제 없음, 1이면 무작위 배치와 같은 수준(기준 대비 비율). 기준이 0인 항목은 0. */
+  relative: Evaluation["breakdown"];
   conditionSummary: Array<{ group: string; label: string; status: "satisfied" | "warning" | "violation"; detail: string; penalty: number }>;
   pairDetails: Array<{ studentAId: string; studentAName: string; studentBId: string; studentBName: string; seatAId: string; seatBId: string; type: PairConstraintType; strength: ConstraintStrength; currentDistance: number; targetDistance?: number; relation?: string; risk?: number; status: "satisfied" | "warning" | "violation" }>;
 }
