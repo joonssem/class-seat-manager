@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateAllocation, generateCandidates, validateAllocation } from "../../src/domain/seating-engine";
+import { evaluateAllocation, generateCandidates, generateCandidatesAsync, validateAllocation } from "../../src/domain/seating-engine";
 import { seats, students } from "../fixtures/seat-fixture";
 
 describe("자리배치 엔진", () => {
@@ -42,5 +42,24 @@ describe("자리배치 엔진", () => {
     expect(far.breakdown.pairDistance).toBe(0);
     expect(far.hardViolations).toHaveLength(0);
     expect(far.pairDetails).toEqual([expect.objectContaining({ studentAId: "stu-1", studentBId: "stu-2", type: "가능한 한 멀리", currentDistance: expect.any(Number), targetDistance: expect.any(Number), status: "satisfied" })]);
+  });
+});
+
+describe("비동기 후보 생성", () => {
+  const input = { students, seats, history: [], seed: 42, settings: { restartCount: 4, maxIterations: 100 } };
+
+  it("동기 생성과 같은 후보를 만들고 진행을 보고한다", async () => {
+    const progress: Array<[number, number]> = [];
+    const result = await generateCandidatesAsync(input, { onProgress: (done, total) => progress.push([done, total]) });
+    expect(result).toEqual(generateCandidates(input));
+    expect(progress[0]).toEqual([0, 4]);
+    expect(progress[progress.length - 1]).toEqual([4, 4]);
+  });
+
+  it("취소하면 빈 배열을 반환하고 더 이상 진행하지 않는다", async () => {
+    let calls = 0;
+    const result = await generateCandidatesAsync(input, { onProgress: () => { calls += 1; }, isCancelled: () => calls >= 2 });
+    expect(result).toEqual([]);
+    expect(calls).toBeLessThan(5);
   });
 });

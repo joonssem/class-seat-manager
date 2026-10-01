@@ -13,6 +13,11 @@ export interface AppInfo {
   environment: "development" | "production";
 }
 
+export interface SeatingOptions {
+  /** 세로 한 줄 모둠 활동을 고려한다. */
+  groupActivity: boolean;
+}
+
 export interface AppApi {
   getInfo(): Promise<AppInfo>;
   students: {
@@ -30,8 +35,12 @@ export interface AppApi {
   };
   seating: {
     confirm(schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[], semester: number, occurredOn: string): Promise<number>;
-    generate(schoolYearId: string, students: Student[], desks: LayoutItem[]): Promise<AllocationCandidate[]>;
-    evaluate(schoolYearId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[]): Promise<AllocationCandidate["evaluation"]>;
+    generate(schoolYearId: string, students: Student[], desks: LayoutItem[], options?: SeatingOptions): Promise<AllocationCandidate[]>;
+    /** 진행 중인 후보 생성을 취소한다. 취소된 generate는 빈 배열을 반환한다. */
+    cancelGenerate(): Promise<void>;
+    /** 후보 생성 진행(완료 횟수/전체)을 구독하고 해제 함수를 반환한다. */
+    onGenerateProgress(listener: (progress: { completed: number; total: number }) => void): () => void;
+    evaluate(schoolYearId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[], options?: SeatingOptions): Promise<AllocationCandidate["evaluation"]>;
   };
   history: { list(schoolYearId: string, semester?: number): Promise<SeatingHistoryRow[]>; experience(schoolYearId: string, semester?: number): Promise<StudentExperienceRow[]>; assignments(sessionId: string): Promise<SeatingAssignment[]>; latestAssignments(schoolYearId: string): Promise<SeatingAssignment[]>; importHistorical(schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], sessions: Array<{ semester: number; occurredOn: string; assignments: SeatingAssignment[] }>): Promise<number[]>; };
   constraints: { get(schoolYearId: string): Promise<ConstraintSet>; save(schoolYearId: string, set: ConstraintSet): Promise<ConstraintSet>; };

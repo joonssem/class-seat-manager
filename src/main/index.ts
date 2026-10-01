@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { z } from "zod";
 import { join } from "node:path";
-import type { AppInfo } from "../shared/contracts/app";
+import type { AppInfo, SeatingOptions } from "../shared/contracts/app";
 import { StudentService } from "../application/student-service";
 import type { StudentInput } from "../domain/student-validation";
 import { openDatabase } from "./db/database";
@@ -14,7 +14,7 @@ import { SeatingService } from "../application/seating-service";
 import { SqliteSeatingRepository } from "./db/seating-repository";
 import { SeatingHistoryService } from "../application/seating-history-service";
 import { SqliteSeatingHistoryRepository } from "./db/seating-history-repository";
-import { evaluateAllocation, generateCandidates } from "../domain/seating-engine";
+import { evaluateAllocation, generateCandidatesAsync } from "../domain/seating-engine";
 import { calculateSeatPosition } from "../domain/classroom-layout";
 import type { LayoutItem } from "../domain/classroom-layout";
 import type { Seat, Student, SeatingAssignment } from "../domain/models";
@@ -27,7 +27,7 @@ import type { CafeteriaAssignment } from "../domain/cafeteria-engine";
 import { BackupService } from "./system/backup-service";
 import { LeadershipService } from "../application/leadership-service";
 import { SqliteLeadershipRepository } from "./db/leadership-repository";
-import { assignmentSchema, cafeteriaAssignmentSchema, constraintSetSchema, layoutItemSchema, parseIpc, schoolYearIdSchema, studentIdSchema, studentInputSchema, studentSchema, zDateSchema } from "./ipc-validation";
+import { assignmentSchema, cafeteriaAssignmentSchema, constraintSetSchema, layoutItemSchema, parseIpc, schoolYearIdSchema, seatingOptionsSchema, studentIdSchema, studentInputSchema, studentSchema, zDateSchema } from "./ipc-validation";
 
 let mainWindow: BrowserWindow | undefined;
 
@@ -69,6 +69,8 @@ function createWindow(): void {
   mainWindow.on("closed", () => { mainWindow = undefined; });
 }
 
+let generationCancelled = false;
+
 function registerIpc(): void {
   ipcMain.handle("app:get-info", (): AppInfo => ({
     name: "학급 자리배치 도우미",
@@ -83,13 +85,16 @@ function registerIpc(): void {
   ipcMain.handle("classroom:get", (_event, schoolYearId: string) => classroomService.get(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID")));
   ipcMain.handle("classroom:save", (_event, schoolYearId: string, items: LayoutItem[]) => classroomService.save(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(layoutItemSchema.array().max(500), items, "교실 요소")));
   ipcMain.handle("seating:confirm", (_event, schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[], semester: number, occurredOn: string) => seatingService.confirm(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(z.string().trim().min(1), classroomLayoutId, "교실 배치 ID"), parseIpc(studentSchema.array().max(100), students, "학생 목록"), parseIpc(layoutItemSchema.array().max(500), desks, "교실 요소"), parseIpc(assignmentSchema.array().max(100), assignments, "자리 배치"), parseIpc(z.number().int().min(1).max(2), semester, "학기"), parseIpc(zDateSchema, occurredOn, "배치일")));
-  ipcMain.handle("seating:generate", (_event, schoolYearId: string, students: Student[], desks: LayoutItem[]) => {
+  ipcMain.handle("seating:cancel-generate", () => { generationCancelled = true; });
+  ipcMain.handle("seating:generate", async (event, schoolYearId: string, students: Student[], desks: LayoutItem[], options?: SeatingOptions) => {
+    const validatedOptions = parseIpc(seatingOptionsSchema, options, "배치 옵션");
     const validatedSchoolYearId = parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID");
     const validatedStudents = parseIpc(studentSchema.array().max(100), students, "학생 목록");
     const validatedDesks = parseIpc(layoutItemSchema.array().max(500), desks, "교실 요소");
-    return generateCandidates({ students: validatedStudents, seats: toSeats(validatedDesks), history: historyService.confirmedSessions(validatedSchoolYearId), seatConstraints: constraintRepository.seat(validatedSchoolYearId), pairConstraints: constraintRepository.pairs(validatedSchoolYearId) });
+    generationCancelled = false;
+    return generateCandidatesAsync({ students: validatedStudents, seats: toSeats(validatedDesks), history: historyService.confirmedSessions(validatedSchoolYearId), seatConstraints: constraintRepository.seat(validatedSchoolYearId), pairConstraints: constraintRepository.pairs(validatedSchoolYearId), settings: { groupActivity: validatedOptions?.groupActivity ?? false } }, { isCancelled: () => generationCancelled, onProgress: (completed, total) => event.sender.send("seating:generate-progress", { completed, total }) });
   });
-  ipcMain.handle("seating:evaluate", (_event, schoolYearId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[]) => { const id = parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"); const validatedStudents = parseIpc(studentSchema.array().max(100), students, "학생 목록"); const validatedDesks = parseIpc(layoutItemSchema.array().max(500), desks, "교실 요소"); return evaluateAllocation({ students: validatedStudents, seats: toSeats(validatedDesks), history: historyService.confirmedSessions(id), seatConstraints: constraintRepository.seat(id), pairConstraints: constraintRepository.pairs(id) }, parseIpc(assignmentSchema.array().max(100), assignments, "자리 배치")); });
+  ipcMain.handle("seating:evaluate", (_event, schoolYearId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[], options?: SeatingOptions) => { const validatedOptions = parseIpc(seatingOptionsSchema, options, "배치 옵션"); const id = parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"); const validatedStudents = parseIpc(studentSchema.array().max(100), students, "학생 목록"); const validatedDesks = parseIpc(layoutItemSchema.array().max(500), desks, "교실 요소"); return evaluateAllocation({ students: validatedStudents, seats: toSeats(validatedDesks), history: historyService.confirmedSessions(id), seatConstraints: constraintRepository.seat(id), pairConstraints: constraintRepository.pairs(id), settings: { groupActivity: validatedOptions?.groupActivity ?? false } }, parseIpc(assignmentSchema.array().max(100), assignments, "자리 배치")); });
   ipcMain.handle("history:list", (_event, schoolYearId: string, semester?: number) => historyService.list(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), semester === undefined ? undefined : parseIpc(z.number().int().min(1).max(2), semester, "학기")));
   ipcMain.handle("history:experience", (_event, schoolYearId: string, semester?: number) => historyService.experience(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), semester === undefined ? undefined : parseIpc(z.number().int().min(1).max(2), semester, "학기")));
   ipcMain.handle("history:assignments", (_event, sessionId: string) => historyService.assignments(parseIpc(z.string().trim().min(1), sessionId, "자리배치 회차 ID")));

@@ -25,13 +25,25 @@
 
 ## 거리와 근접 정의
 
-좌표 중심점 간 유클리드 거리 `sqrt(dx²+dy²)`를 정규화 canvas 기준으로 계산한다. 교실의 통로·벽을 아직 모델링하지 않으므로 직선거리이며, 회전과 desk 크기는 중심점 보정에만 사용한다. 기본 근접은 8방향 이웃 또는 거리 임계값 `nearDistance` 이내로 정의하고, 임계값은 좌석 간격의 중앙값에 기반해 계산한다. 세로·가로 인접이 중요할 때는 실제 좌표의 방향을 함께 기록한다.
+> 2026-10 개정: 중심점 간 유클리드 거리 + `nearDistance` 임계값 방식은 폐기했다. 가로로 넓은 책상에서는 옆자리 중심 거리가 앞뒤보다 커 "옆자리가 인접하지 않음"으로 판정되는 결함이 있었다. 근거는 `27-gaze-based-proximity.md`.
+
+수업 중 떠들 수 있는 정도는 물리적 거리가 아니라 **서로 시선을 주고받기 쉬운 정도**다. 두 좌석의 근접도(위험도, 0~1)는 다음 곱으로 정의한다.
+
+- 거리 감쇠: 책상 가장자리 사이 간격 기준(`adjacentGap` 이하 1, `reachGap` 이상 0).
+- 회전 용이성: 각 학생의 기본 시선(교실 앞 집중점 `focusX/Y`)에서 이웃을 보기 위해 돌려야 하는 각도. `comfortableTurnDeg` 이하면 1, 180°에서 0. 쉬운 쪽 40% + 어려운 쪽 60%.
+- 결과: 옆자리 ≈ 1.0, 앞뒤 대각선 ≈ 0.8, 바로 앞뒤 ≈ 0.4. 교실 측면·앞줄 학생의 몸 방향이 같은 식으로 반영된다.
+
+`바로 인접 금지`는 8방향 이웃(거리 감쇠 1)이면 위반이다. 성별 인접·과거 근접 반복·`가능한 한 멀리`는 위험도를 연속값으로 사용한다. 성별은 성비·좌석 제약상 필수 제약이 아니라 강한 감점(가중치 40)이다.
+
+## 세로 모둠 활동(선택)
+
+가끔 세로 한 줄(같은 x 열)로 모둠 활동을 한다. "세로 한 줄 모둠 활동 고려" 옵션을 켜면 같은 세로줄을 모둠으로 보고 `groupActivity` 항목(가중치 10)을 평가한다: 3명 이상 모둠이 한 성별로만 구성됨, 이전 회차에 같은 모둠이었던 학생 반복(감쇠 적용), 짝 조건 학생이 같은 모둠에 배치됨. 기본값은 꺼짐이다.
 
 ## 점수 모델
 
 낮을수록 좋은 penalty를 기본 내부 모델로 사용하고 UI에는 `100 - normalizedPenalty` 형태로 점수화한다.
 
-`totalPenalty = 30*sameSeat + 25*repeatProximity + 15*genderAdjacency + 15*positionExperience + 10*studentPosition + 5*pairDistance`
+`totalPenalty = 30*sameSeat + 25*repeatProximity + 40*genderAdjacency + 15*positionExperience + 10*studentPosition + 5*pairDistance + 10*groupActivity`
 
 기본 가중치는 설계 판단이며 `AppSettings`의 `engineProfile`로 조정 가능하게 한다. 우선순위는 가중치뿐 아니라 단계별 lexicographic 비교로도 보호한다: (1) hard 위반 0 여부, (2) sameSeat, (3) repeatProximity, (4) gender, (5) 개인 조건, (6) pair 조건. 교사가 프로필을 바꿔도 hard 검증은 무시하지 않는다.
 

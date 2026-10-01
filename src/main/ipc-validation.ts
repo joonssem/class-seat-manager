@@ -50,3 +50,5 @@ export function parseIpc<T>(schema: z.ZodType<T>, value: unknown, fieldName: str
   if (!result.success) throw new Error(`${fieldName} 입력이 올바르지 않습니다: ${result.error.issues[0]?.message ?? "형식 오류"}`);
   return result.data;
 }
+
+export const seatingOptionsSchema = z.object({ groupActivity: z.boolean() }).strict().optional();

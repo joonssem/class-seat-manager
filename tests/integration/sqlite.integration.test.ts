@@ -13,7 +13,8 @@ try {
   database.close();
   nativeBindingAvailable = true;
 } catch {
-  nativeBindingAvailable = false;
+  // test:integration(Electron 내장 Node)에서는 반드시 실행되어야 하므로 스킵 대신 실패시킨다.
+  nativeBindingAvailable = process.env.REQUIRE_SQLITE === "1";
 }
 
 afterEach(() => {

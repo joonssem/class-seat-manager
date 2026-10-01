@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import type { LayoutItem } from "../../domain/classroom-layout";
 import type { SeatingAssignment, Student } from "../../domain/models";
+import type { SeatingOptions } from "../../shared/contracts/app";
 import { Button, ConfirmDialog, StatusBanner, Toast } from "./ui";
 
-interface Props { schoolYearId: string; onBack: () => void; initialAssignments?: SeatingAssignment[]; onPreview: (assignments: SeatingAssignment[]) => void; onConfirmed?: (assignments: SeatingAssignment[]) => void; }
+interface Props { schoolYearId: string; onBack: () => void; initialAssignments?: SeatingAssignment[]; onPreview: (assignments: SeatingAssignment[]) => void; onConfirmed?: (assignments: SeatingAssignment[]) => void; options?: SeatingOptions; }
 
-export function ManualSeating({ schoolYearId, onBack, initialAssignments = [], onPreview, onConfirmed }: Props): JSX.Element {
+export function ManualSeating({ schoolYearId, onBack, initialAssignments = [], onPreview, onConfirmed, options }: Props): JSX.Element {
   const [students, setStudents] = useState<Student[]>([]);
   const [desks, setDesks] = useState<LayoutItem[]>([]);
   const [layoutId, setLayoutId] = useState("");
@@ -22,6 +23,8 @@ export function ManualSeating({ schoolYearId, onBack, initialAssignments = [], o
   const [toast, setToast] = useState("");
 
   useEffect(() => { void Promise.all([window.appApi.students.list(schoolYearId), window.appApi.classroom.get(schoolYearId)]).then(([rows, layout]) => { setStudents(rows.filter((student) => student.enrollmentStatus === "재학")); setLayoutId(layout?.classroomLayoutId ?? ""); setDesks((layout?.items ?? []).filter((item) => item.type === "desk")); }); }, [schoolYearId]);
+  useEffect(() => { if (!students.length || !desks.length || !initialAssignments.length) return; void window.appApi.seating.evaluate(schoolYearId, students, desks, initialAssignments, options).then((evaluation) => setScore(evaluation.score)).catch(() => setScore(null)); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, desks]);
   useEffect(() => { const onBeforeUnload = (event: BeforeUnloadEvent): void => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; }; window.addEventListener("beforeunload", onBeforeUnload); return () => window.removeEventListener("beforeunload", onBeforeUnload); }, [dirty]);
 
   const assignedIds = useMemo(() => new Set(Object.values(assignments).filter(Boolean)), [assignments]);
@@ -30,7 +33,7 @@ export function ManualSeating({ schoolYearId, onBack, initialAssignments = [], o
   const rows = (): SeatingAssignment[] => Object.entries(assignments).filter(([, studentId]) => studentId).map(([seatId, studentId]) => ({ seatId, studentId }));
   const applyAssignments = (next: Record<string, string>): void => {
     setAssignments(next); setDirty(true);
-    void window.appApi.seating.evaluate(schoolYearId, students, desks, Object.entries(next).filter(([, id]) => id).map(([id, studentId]) => ({ seatId: id, studentId }))).then((evaluation) => setScore(evaluation.score)).catch(() => setScore(null));
+    void window.appApi.seating.evaluate(schoolYearId, students, desks, Object.entries(next).filter(([, id]) => id).map(([id, studentId]) => ({ seatId: id, studentId })), options).then((evaluation) => setScore(evaluation.score)).catch(() => setScore(null));
   };
   const update = (seatId: string, studentId: string): void => {
     const next = { ...assignments }; const previousSeat = Object.entries(next).find(([, assignedStudentId]) => assignedStudentId === studentId)?.[0]; const displacedStudent = next[seatId];

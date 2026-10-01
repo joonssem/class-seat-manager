@@ -18,8 +18,14 @@ const api: AppApi = {
   },
   seating: {
     confirm: (schoolYearId, classroomLayoutId, students, desks, assignments, semester, occurredOn) => ipcRenderer.invoke("seating:confirm", schoolYearId, classroomLayoutId, students, desks, assignments, semester, occurredOn),
-    generate: (schoolYearId, students, desks) => ipcRenderer.invoke("seating:generate", schoolYearId, students, desks),
-    evaluate: (schoolYearId, students, desks, assignments) => ipcRenderer.invoke("seating:evaluate", schoolYearId, students, desks, assignments)
+    generate: (schoolYearId, students, desks, options) => ipcRenderer.invoke("seating:generate", schoolYearId, students, desks, options),
+    cancelGenerate: () => ipcRenderer.invoke("seating:cancel-generate"),
+    onGenerateProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: { completed: number; total: number }): void => listener(progress);
+      ipcRenderer.on("seating:generate-progress", handler);
+      return () => ipcRenderer.removeListener("seating:generate-progress", handler);
+    },
+    evaluate: (schoolYearId, students, desks, assignments, options) => ipcRenderer.invoke("seating:evaluate", schoolYearId, students, desks, assignments, options)
   },
   history: {
     list: (schoolYearId, semester) => ipcRenderer.invoke("history:list", schoolYearId, semester),

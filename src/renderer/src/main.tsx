@@ -1,6 +1,6 @@
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { AppInfo, AppApi } from "../../shared/contracts/app";
+import type { AppInfo, AppApi, SeatingOptions } from "../../shared/contracts/app";
 import type { SchoolYear } from "../../domain/school-year";
 import type { Student } from "../../domain/models";
 import type { StudentInput } from "../../domain/student-validation";
@@ -81,6 +81,7 @@ function App(): JSX.Element {
   const [chartReturnScreen, setChartReturnScreen] = useState<"dashboard" | "manual-seating" | "history">("dashboard");
   const [yearInput, setYearInput] = useState(String(new Date().getFullYear()));
   const [yearError, setYearError] = useState("");
+  const [seatingOptions, setSeatingOptions] = useState<SeatingOptions | undefined>(undefined);
   const [draftAssignments, setDraftAssignments] = useState<import("../../domain/models").SeatingAssignment[]>([]);
   const [previewAssignments, setPreviewAssignments] = useState<import("../../domain/models").SeatingAssignment[]>([]);
   const [currentAssignments, setCurrentAssignments] = useState<import("../../domain/models").SeatingAssignment[]>([]);
@@ -114,7 +115,7 @@ function App(): JSX.Element {
   }, [schoolYear]);
   useEffect(() => { refreshDashboard(); }, [refreshDashboard]);
 
-  const goDashboard = (): void => { refreshDashboard(); setScreen("dashboard"); };
+  const goDashboard = (): void => { setSeatingOptions(undefined); refreshDashboard(); setScreen("dashboard"); };
 
   const createYear = (): void => {
     const year = Number(yearInput);
@@ -123,9 +124,9 @@ function App(): JSX.Element {
 
   if (screen === "students") return <main className="app-shell"><header className="topbar"><div><button type="button" className="back-button" onClick={goDashboard}>← 대시보드</button><h1>학생 관리</h1></div><div className="year-badge">{schoolYear?.label ?? "학년도 미설정"}</div></header>{schoolYear ? <StudentManager students={students} onChange={setStudents} schoolYearId={schoolYear.schoolYearId} schoolYearLabel={schoolYear.label} /> : <section className="welcome-card"><div><h2>먼저 학년도를 생성하세요</h2><p>학생 명단은 학년도에 연결되어 저장됩니다.</p></div></section>}<footer>{info ? `${info.name} · SQLite 연결` : "앱 정보를 불러오는 중입니다."}</footer></main>;
   if (screen === "classroom") return <ClassroomEditor onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} />;
-  if (screen === "manual-seating") return <ManualSeating onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} initialAssignments={draftAssignments} onConfirmed={(assignments) => { setCurrentAssignments(assignments); setDraftAssignments(assignments); }} onPreview={(assignments) => { setPreviewAssignments(assignments); setDraftAssignments(assignments); setChartReturnScreen("manual-seating"); setScreen("chart"); }} />;
+  if (screen === "manual-seating") return <ManualSeating options={seatingOptions} onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} initialAssignments={draftAssignments} onConfirmed={(assignments) => { setCurrentAssignments(assignments); setDraftAssignments(assignments); }} onPreview={(assignments) => { setPreviewAssignments(assignments); setDraftAssignments(assignments); setChartReturnScreen("manual-seating"); setScreen("chart"); }} />;
   if (screen === "history") return <SeatingHistory onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} onOpenChart={(assignments) => { setPreviewAssignments(assignments); setChartReturnScreen("history"); setScreen("chart"); }} />;
-  if (screen === "new-seating") return <NewSeating onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} onChoose={(candidate) => { setDraftAssignments(candidate.assignments); setScreen("manual-seating"); }} />;
+  if (screen === "new-seating") return <NewSeating onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} onChoose={(candidate, options) => { setDraftAssignments(candidate.assignments); setSeatingOptions(options); setScreen("manual-seating"); }} />;
   if (screen === "constraints") return <Constraints onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} schoolYearLabel={schoolYear?.label ?? "학년도 미설정"} />;
   if (screen === "chart") return <SeatChartScreen onBack={() => chartReturnScreen === "dashboard" ? goDashboard() : setScreen(chartReturnScreen)} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} assignments={previewAssignments} />;
   if (screen === "cafeteria") return <Cafeteria onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} />;

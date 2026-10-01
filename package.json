@@ -14,6 +14,8 @@
     "check:sqlite": "node scripts/check-sqlite-binding.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "node scripts/run-integration-tests.cjs",
+    "test:all": "npm run test && npm run test:integration",
     "package:win": "npm run build && electron-builder --win"
   },
   "dependencies": {
@@ -24,20 +26,34 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/better-sqlite3": "^7.6.12",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
+    "jsdom": "^29.1.1",
     "typescript": "^5.7.3",
     "vitest": "^3.0.7"
   },
   "build": {
     "appId": "local.class-seat-manager",
     "productName": "학급 자리배치 도우미",
-    "files": ["out/**/*"],
-    "extraResources": [{"from": "src/main/db/migrations", "to": "migrations"}],
-    "win": {"target": ["nsis"]}
+    "files": [
+      "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "src/main/db/migrations",
+        "to": "migrations"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
   }
 }

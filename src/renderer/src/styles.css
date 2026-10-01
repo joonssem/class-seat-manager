@@ -116,3 +116,6 @@ textarea { min-height: 84px; resize: vertical; }
 @media (max-width: 800px) { .manual-grid { grid-template-columns: repeat(2, 1fr); } .manual-toolbar, .manual-footer { align-items: start; flex-direction: column; } }
 @media (max-width: 900px) { .editor-layout { grid-template-columns: 1fr; } .classroom-canvas { min-height: 500px; } }
 .chart-board.teacher-board { top: auto; bottom: 4%; }
+
+.option-check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin-right: 12px; }
+.option-check input { width: 18px; height: 18px; }
