@@ -4,7 +4,7 @@
 
 ## 첫 화면 UX/UI 개선
 
-검토 자료: `capture001.png`
+검토 자료: `assets/capture001.png`
 
 ### P0 — 상태와 주요 행동을 일치시키기
 

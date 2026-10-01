@@ -1,5 +1,7 @@
 # P1 이력·통계 연계 구현 기록
 
+> 참고: 이 문서는 작성 시점의 기록이다. "다음 단계"·"아직 진행하지 않음" 표현은 이후 구현으로 대부분 완료되었다. 최신 상태는 `23a-plan-completion-audit.md`와 `28-top-level-review-and-decision.md`를 기준으로 한다.
+
 작성일: 2026-09-01
 관련 문서: `09-work-progress.md`, `10-priority-simulation.md`
 
