@@ -1,10 +1,11 @@
 import type { LayoutItem } from "./classroom-layout";
 import type { SeatingAssignment, Student } from "./models";
+import { orientGroupLayout } from "./group-seating";
 export type SeatChartMode = "student" | "teacher";
 export interface SeatChartCell { seatId: string; label: string; studentNumber?: number; studentName?: string; x: number; y: number; width: number; height: number; }
 export function createSeatChart(items: LayoutItem[], students: Student[], assignments: SeatingAssignment[], mode: SeatChartMode): SeatChartCell[] {
   const byStudent = new Map(students.map((student) => [student.studentId, student])); const bySeat = new Map(assignments.map((assignment) => [assignment.seatId, assignment.studentId]));
-  return items.filter((item) => item.type === "desk").map((item) => { const student = byStudent.get(bySeat.get(item.id) ?? ""); return { seatId: item.id, label: student ? `${student.studentNumber}. ${student.name}` : "빈 자리", studentNumber: student?.studentNumber, studentName: student?.name, x: mode === "teacher" ? 1 - item.x - item.width : item.x, y: mode === "teacher" ? 1 - item.y - item.height : item.y, width: item.width, height: item.height }; });
+  return orientGroupLayout(items).filter((item) => item.type === "desk").map((item) => { const student = byStudent.get(bySeat.get(item.id) ?? ""); return { seatId: item.id, label: student ? `${student.studentNumber}. ${student.name}` : "빈 자리", studentNumber: student?.studentNumber, studentName: student?.name, x: mode === "teacher" ? 1 - item.x - item.width : item.x, y: mode === "teacher" ? 1 - item.y - item.height : item.y, width: item.width, height: item.height }; });
 }
 
 export interface FitOptions {
@@ -67,6 +68,8 @@ function regularizeAxis(centers: number[], tolerance: number): number[] {
 }
 
 export function regularizeSeatChart(cells: SeatChartCell[]): SeatChartCell[] {
+  // Group desks deliberately touch and the rear group's center must remain exact.
+  if (cells.some((cell) => /^group-.+-\d+-\d+$/.test(cell.seatId))) return cells;
   if (cells.length < 2) return cells;
   const avgWidth = cells.reduce((sum, cell) => sum + cell.width, 0) / cells.length;
   const avgHeight = cells.reduce((sum, cell) => sum + cell.height, 0) / cells.length;

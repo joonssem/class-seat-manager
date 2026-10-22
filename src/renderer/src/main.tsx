@@ -16,6 +16,7 @@ import { Cafeteria } from "./cafeteria";
 import { CafeteriaHistory } from "./cafeteria-history";
 import { Backup } from "./backup";
 import { NewSeating } from "./new-seating";
+import { GroupSeating } from "./group-seating";
 import { Button, ConfirmDialog, StatusBanner } from "./ui";
 import "./styles.css";
 
@@ -77,7 +78,7 @@ function App(): JSX.Element {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [schoolYear, setSchoolYear] = useState<SchoolYear | null>(null);
   const [students, setStudents] = useState<Student[]>(demoStudents);
-  const [screen, setScreen] = useState<"dashboard" | "students" | "classroom" | "manual-seating" | "history" | "new-seating" | "constraints" | "chart" | "cafeteria" | "cafeteria-history" | "backup">("dashboard");
+  const [screen, setScreen] = useState<"dashboard" | "students" | "classroom" | "manual-seating" | "history" | "new-seating" | "group-seating" | "constraints" | "chart" | "cafeteria" | "cafeteria-history" | "backup">("dashboard");
   const [chartReturnScreen, setChartReturnScreen] = useState<"dashboard" | "manual-seating" | "history">("dashboard");
   const [yearInput, setYearInput] = useState(String(new Date().getFullYear()));
   const [yearError, setYearError] = useState("");
@@ -124,6 +125,7 @@ function App(): JSX.Element {
 
   if (screen === "students") return <main className="app-shell"><header className="topbar"><div><button type="button" className="back-button" onClick={goDashboard}>← 대시보드</button><h1>학생 관리</h1></div><div className="year-badge">{schoolYear?.label ?? "학년도 미설정"}</div></header>{schoolYear ? <StudentManager students={students} onChange={setStudents} schoolYearId={schoolYear.schoolYearId} schoolYearLabel={schoolYear.label} /> : <section className="welcome-card"><div><h2>먼저 학년도를 생성하세요</h2><p>학생 명단은 학년도에 연결되어 저장됩니다.</p></div></section>}<footer>{info ? `${info.name} · SQLite 연결` : "앱 정보를 불러오는 중입니다."}</footer></main>;
   if (screen === "classroom") return <ClassroomEditor onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} />;
+  if (screen === "group-seating") return <GroupSeating onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} />;
   if (screen === "manual-seating") return <ManualSeating options={seatingOptions} onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} initialAssignments={draftAssignments} onConfirmed={(assignments) => { setCurrentAssignments(assignments); setDraftAssignments(assignments); }} onPreview={(assignments) => { setPreviewAssignments(assignments); setDraftAssignments(assignments); setChartReturnScreen("manual-seating"); setScreen("chart"); }} />;
   if (screen === "history") return <SeatingHistory onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} onOpenChart={(assignments) => { setPreviewAssignments(assignments); setChartReturnScreen("history"); setScreen("chart"); }} />;
   if (screen === "new-seating") return <NewSeating onBack={goDashboard} schoolYearId={schoolYear?.schoolYearId ?? "sy_unknown"} onChoose={(candidate, options) => { setDraftAssignments(candidate.assignments); setSeatingOptions(options); setScreen("manual-seating"); }} />;
@@ -169,6 +171,7 @@ function App(): JSX.Element {
           <DashboardCard title="자리배치 조건" description={`학생 위치 및 짝 조건 ${conditionCount}개`} action="조건 설정" onClick={() => setScreen("constraints")} />
         </div></section>
         <section className="dashboard-section"><div className="dashboard-section-heading"><h2>현재 자리</h2><p>{currentAssignments.length ? `최근 확정 배치 · ${currentAssignments.length}명` : "아직 확정된 자리표가 없습니다."}</p></div><div className="dashboard-grid current-grid">
+          <DashboardCard title="모둠 자리배치" description="저장된 관계 조건과 성비를 고려하여 4~5명 모둠을 구성합니다." action="모둠 자리 만들기" disabled={!activeStudents.length} onClick={() => setScreen("group-seating")} />
           <DashboardCard title="자리표 보기·인쇄" description={currentAssignments.length ? "현재 자리표를 열어 인쇄하거나 PDF로 저장합니다." : "첫 자리배치를 확정하면 자리표를 볼 수 있습니다."} action="현재 자리표 열기" disabled={!currentAssignments.length} onClick={openCurrentChart} />
           <DashboardCard title="자리 기록" description="확정 이력과 학생별 자리 경험을 확인합니다." action="기록 보기" onClick={() => setScreen("history")} />
         </div></section>

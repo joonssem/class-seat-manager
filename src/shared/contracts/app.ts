@@ -35,6 +35,7 @@ export interface AppApi {
     save(schoolYearId: string, items: LayoutItem[]): Promise<{ classroomLayoutId: string; schoolYearId: string; items: LayoutItem[] }>;
   };
   seating: {
+    confirmGroups(schoolYearId: string, groups: string[][], spreadIds: string[], occurredOn: string): Promise<number>;
     confirm(schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[], semester: number, occurredOn: string): Promise<number>;
     generate(schoolYearId: string, students: Student[], desks: LayoutItem[], options?: SeatingOptions): Promise<AllocationCandidate[]>;
     /** 진행 중인 후보 생성을 취소한다. 취소된 generate는 빈 배열을 반환한다. */

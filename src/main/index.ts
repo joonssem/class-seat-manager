@@ -13,6 +13,7 @@ import { SqliteSchoolYearRepository } from "./db/school-year-repository";
 import { ClassroomService } from "../application/classroom-service";
 import { SqliteClassroomRepository } from "./db/classroom-repository";
 import { SeatingService } from "../application/seating-service";
+import { confirmGroupSeating } from "../application/group-seating-service";
 import { SqliteSeatingRepository } from "./db/seating-repository";
 import { SeatingHistoryService } from "../application/seating-history-service";
 import { SqliteSeatingHistoryRepository } from "./db/seating-history-repository";
@@ -89,6 +90,14 @@ function registerIpc(): void {
   ipcMain.handle("classroom:save", (_event, schoolYearId: string, items: LayoutItem[]) => classroomService.save(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(layoutItemSchema.array().max(500), items, "교실 요소")));
   ipcMain.handle("seating:confirm", (_event, schoolYearId: string, classroomLayoutId: string, students: Student[], desks: LayoutItem[], assignments: SeatingAssignment[], semester: number, occurredOn: string) => seatingService.confirm(parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID"), parseIpc(z.string().trim().min(1), classroomLayoutId, "교실 배치 ID"), parseIpc(studentSchema.array().max(100), students, "학생 목록"), parseIpc(layoutItemSchema.array().max(500), desks, "교실 요소"), parseIpc(assignmentSchema.array().max(100), assignments, "자리 배치"), parseIpc(z.number().int().min(1).max(2), semester, "학기"), parseIpc(zDateSchema, occurredOn, "배치일")));
   ipcMain.handle("seating:cancel-generate", () => { generationCancelled = true; });
+  ipcMain.handle("seating:confirm-groups", (_event, schoolYearId: string, groups: string[][], spreadIds: string[], occurredOn: string) => {
+    const id = parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID");
+    const members = parseIpc(studentIdSchema.array().min(3).max(5).array().min(1).max(8), groups, "모둠 구성");
+    const spread = parseIpc(studentIdSchema.array().max(8), spreadIds, "분산 학생");
+    const date = parseIpc(zDateSchema, occurredOn, "배치일");
+    if (!database) throw new Error("데이터베이스가 준비되지 않았습니다.");
+    return confirmGroupSeating({ students: studentService.list(id), sizes: members.map((g) => g.length), pairs: constraintRepository.pairs(id), positions: constraintRepository.seat(id), spreadIds: spread, fixtures: classroomService.get(id)?.items ?? [], namespace: id }, members, date, classroomService, seatingService, (work) => database!.transaction(work)());
+  });
   ipcMain.handle("seating:generate", async (event, schoolYearId: string, students: Student[], desks: LayoutItem[], options?: SeatingOptions) => {
     const validatedOptions = parseIpc(seatingOptionsSchema, options, "배치 옵션");
     const validatedSchoolYearId = parseIpc(schoolYearIdSchema, schoolYearId, "학년도 ID");

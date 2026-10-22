@@ -15,7 +15,7 @@ export class SqliteClassroomRepository implements ClassroomRepository {
   }
   save(data: ClassroomLayoutData): void {
     const now = new Date().toISOString();
-    this.database.exec("BEGIN");
+    this.database.exec("SAVEPOINT classroom_save");
     try {
       this.database.prepare("INSERT INTO classroom_layout (classroom_layout_id, school_year_id, name, canvas_width, canvas_height, coordinate_version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT(classroom_layout_id) DO UPDATE SET updated_at = excluded.updated_at").run(data.classroomLayoutId, data.schoolYearId, "기본 교실", 1, 1, now, now);
       this.database.prepare("UPDATE seat SET is_active = 0 WHERE classroom_layout_id = ?").run(data.classroomLayoutId);
@@ -23,7 +23,7 @@ export class SqliteClassroomRepository implements ClassroomRepository {
       data.items.forEach((item, index) => insert.run(item.id, data.classroomLayoutId, item.type, item.x, item.y, item.width, item.height, index, item.positionOverride ? JSON.stringify(item.positionOverride) : null));
       const seatUpsert = this.database.prepare("INSERT INTO seat (seat_id, classroom_layout_id, element_id, seat_code, is_active, auto_position_tags_json) VALUES (?, ?, ?, ?, 1, '{}') ON CONFLICT(seat_id) DO UPDATE SET classroom_layout_id = excluded.classroom_layout_id, element_id = excluded.element_id, seat_code = excluded.seat_code, is_active = 1");
       data.items.filter((item) => item.type === "desk").forEach((item) => seatUpsert.run(item.id, data.classroomLayoutId, item.id, item.id));
-      this.database.exec("COMMIT");
-    } catch (error) { this.database.exec("ROLLBACK"); throw error; }
+      this.database.exec("RELEASE SAVEPOINT classroom_save");
+    } catch (error) { this.database.exec("ROLLBACK TO SAVEPOINT classroom_save; RELEASE SAVEPOINT classroom_save"); throw error; }
   }
 }

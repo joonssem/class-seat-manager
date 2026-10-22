@@ -1,8 +1,39 @@
 import { describe, expect, it } from "vitest";
 import { createSeatChart, fitSeatChart, regularizeSeatChart } from "../../src/domain/seat-chart";
 import { seats, students } from "../fixtures/seat-fixture";
+import { groupLayout, orientGroupLayout } from "../../src/domain/group-seating";
 
 describe("자리표 변환", () => {
+  it("rotates legacy group desks clockwise and retains student identities and upright text data", () => {
+    const items = [
+      { id: "group-sy-1-1", type: "desk" as const, x: 0.1, y: 0.2, width: 0.12, height: 0.08 },
+      { id: "group-sy-1-2", type: "desk" as const, x: 0.22, y: 0.2, width: 0.12, height: 0.08 },
+      { id: "group-sy-1-3", type: "desk" as const, x: 0.1, y: 0.28, width: 0.12, height: 0.08 },
+      { id: "group-sy-1-4", type: "desk" as const, x: 0.22, y: 0.28, width: 0.12, height: 0.08 }
+    ];
+    const cells = createSeatChart(items, students, [{ studentId: students[0].studentId, seatId: items[0].id }], "student");
+    expect(cells[0].x).toBeGreaterThan(cells[2].x);
+    expect(cells[0].y).toBeLessThan(cells[1].y);
+    expect(cells[0].width).toBeCloseTo(0.08); expect(cells[0].height).toBeCloseTo(0.12);
+    expect(cells[0].studentName).toBe(students[0].name);
+    expect(cells[0].studentNumber).toBe(students[0].studentNumber);
+    expect(orientGroupLayout(orientGroupLayout(items))).toEqual(orientGroupLayout(items));
+    expect(items[0].width).toBe(0.12);
+  });
+  it("keeps only group five at the back and exactly centered through print fitting", () => {
+    const items = groupLayout([4, 4, 4, 4, 5], "sy");
+    const cells = fitSeatChart(regularizeSeatChart(createSeatChart(items, [], [], "student")));
+    const fifth = cells.filter((c) => c.seatId.startsWith("group-sy-5-"));
+    const others = cells.filter((c) => !c.seatId.startsWith("group-sy-5-"));
+    const center = (Math.min(...fifth.map((c) => c.x)) + Math.max(...fifth.map((c) => c.x + c.width))) / 2;
+    expect(center).toBeCloseTo(0.5, 10);
+    expect(Math.min(...fifth.map((c) => c.y))).toBeGreaterThan(Math.max(...others.map((c) => c.y + c.height)));
+    const rear = fifth.find((c) => c.seatId.endsWith("-5"))!;
+    expect(rear.y).toBeGreaterThan(Math.max(...fifth.filter((c) => c !== rear).map((c) => c.y)));
+    const first = cells.filter((c) => c.seatId.startsWith("group-sy-1-"));
+    const second = cells.filter((c) => c.seatId.startsWith("group-sy-2-"));
+    expect(Math.max(...first.map((c) => c.x + c.width))).toBeLessThan(Math.min(...second.map((c) => c.x)));
+  });
   it("학생용과 교사용 좌석 배열을 구분한다", () => {
     const items = seats.map((seat) => ({ id: seat.seatId, type: "desk" as const, x: seat.x, y: seat.y, width: seat.width, height: seat.height }));
     const assignments = [{ studentId: students[0].studentId, seatId: seats[0].seatId }];

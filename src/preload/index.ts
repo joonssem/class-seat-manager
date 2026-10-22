@@ -17,6 +17,7 @@ const api: AppApi = {
     save: (schoolYearId, items) => ipcRenderer.invoke("classroom:save", schoolYearId, items)
   },
   seating: {
+    confirmGroups: (schoolYearId, groups, spreadIds, occurredOn) => ipcRenderer.invoke("seating:confirm-groups", schoolYearId, groups, spreadIds, occurredOn),
     confirm: (schoolYearId, classroomLayoutId, students, desks, assignments, semester, occurredOn) => ipcRenderer.invoke("seating:confirm", schoolYearId, classroomLayoutId, students, desks, assignments, semester, occurredOn),
     generate: (schoolYearId, students, desks, options) => ipcRenderer.invoke("seating:generate", schoolYearId, students, desks, options),
     cancelGenerate: () => ipcRenderer.invoke("seating:cancel-generate"),
